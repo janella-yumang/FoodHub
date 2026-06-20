@@ -291,6 +291,41 @@ stallsRouter.patch(
 );
 
 stallsRouter.delete(
+  "/:stallId",
+  authenticateRequest,
+  authorizeRoles("vendor", "admin"),
+  async (request: Request, response: Response) => {
+    const stallId = firstParam(request.params.stallId);
+
+    if (!stallId) {
+      response.status(400).json({ message: "Invalid stall id." });
+      return;
+    }
+
+    if (!request.userId || !request.role) {
+      response.status(401).json({ message: "Unauthorized." });
+      return;
+    }
+
+    const allowed = await canManageStall(stallId, request.userId, request.role);
+
+    if (!allowed) {
+      response.status(403).json({ message: "You cannot delete this stall." });
+      return;
+    }
+
+    const deleted = await deleteStall(stallId);
+
+    if (!deleted) {
+      response.status(404).json({ message: "Stall not found." });
+      return;
+    }
+
+    response.status(204).send();
+  }
+);
+
+stallsRouter.delete(
   "/menu-items/:menuItemId",
   authenticateRequest,
   authorizeRoles("vendor", "admin"),

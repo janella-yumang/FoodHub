@@ -1,4 +1,5 @@
 const path = require("path");
+const bcrypt = require("bcryptjs");
 require("dotenv").config({ path: path.resolve(__dirname, "..", ".env") });
 const mongoose = require("mongoose");
 
@@ -14,36 +15,45 @@ async function main() {
   console.log("Connected to", mongoUri.split("?")[0]);
 
   try {
-    // Helpers to insert if collection empty
-    async function ensureOne(collectionName, doc) {
+    async function ensureOne(collectionName, query, doc) {
       const col = db.collection(collectionName);
-      const existing = await col.findOne({});
+      const existing = await col.findOne(query);
       if (existing) return existing;
       const res = await col.insertOne(doc);
       return await col.findOne({ _id: res.insertedId });
     }
 
-    const student = await ensureOne("users", {
+    const student = await ensureOne("users", { email: "student@example.com" }, {
       name: "Student Seed",
       email: "student@example.com",
-      passwordHash: "seeded-password-hash",
+      passwordHash: bcrypt.hashSync("Student123!", 10),
       role: "student",
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date()
     });
 
-    const vendor = await ensureOne("users", {
+    const vendor = await ensureOne("users", { email: "vendor@example.com" }, {
       name: "Vendor Seed",
       email: "vendor@example.com",
-      passwordHash: "seeded-password-hash",
+      passwordHash: bcrypt.hashSync("Vendor123!", 10),
       role: "vendor",
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date()
     });
 
-    const stall = await ensureOne("stalls", {
+    const admin = await ensureOne("users", { email: "admin@example.com" }, {
+      name: "Admin Seed",
+      email: "admin@example.com",
+      passwordHash: bcrypt.hashSync("Admin123!", 10),
+      role: "admin",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const stall = await ensureOne("stalls", { vendorId: vendor._id, name: "Seeded Stall" }, {
       vendorId: vendor._id,
       name: "Seeded Stall",
       description: "A seeded stall for testing",
@@ -57,7 +67,7 @@ async function main() {
       updatedAt: new Date()
     });
 
-    const menuItem = await ensureOne("menuitems", {
+    const menuItem = await ensureOne("menuitems", { stallId: stall._id, name: "Seeded Noodle" }, {
       stallId: stall._id,
       name: "Seeded Noodle",
       description: "Tasty seeded noodles",
@@ -73,7 +83,7 @@ async function main() {
       updatedAt: new Date()
     });
 
-    const review = await ensureOne("reviews", {
+    const review = await ensureOne("reviews", { userId: student._id, stallId: stall._id }, {
       userId: student._id,
       stallId: stall._id,
       rating: 5,
@@ -83,7 +93,7 @@ async function main() {
       updatedAt: new Date()
     });
 
-    const favorite = await ensureOne("favorites", {
+    const favorite = await ensureOne("favorites", { userId: student._id, targetId: stall._id }, {
       userId: student._id,
       targetType: "stall",
       targetId: stall._id,
@@ -91,7 +101,7 @@ async function main() {
       updatedAt: new Date()
     });
 
-    const budget = await ensureOne("budgets", {
+    const budget = await ensureOne("budgets", { userId: student._id }, {
       userId: student._id,
       period: "monthly",
       limitAmount: 2000,

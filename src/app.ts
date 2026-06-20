@@ -1,5 +1,6 @@
 import express, { Request, Response } from "express";
 import { authRouter } from "./routes/auth.routes";
+import { categoriesRouter } from "./routes/categories.routes";
 import { favoritesRouter } from "./routes/favorites.routes";
 import { reviewsRouter } from "./routes/reviews.routes";
 import { stallsRouter } from "./routes/stalls.routes";
@@ -9,6 +10,7 @@ export function createApp() {
 
   app.use(express.json());
   app.use("/auth", authRouter);
+  app.use("/categories", categoriesRouter);
   app.use("/reviews", reviewsRouter);
   app.use("/favorites", favoritesRouter);
   app.use("/stalls", stallsRouter);

@@ -83,6 +83,15 @@ export async function updateStall(stallId: string, updates: UpdateStallInput) {
   return StallModel.findByIdAndUpdate(stallId, { $set: updates }, { new: true }).lean();
 }
 
+export async function deleteStall(stallId: string) {
+  if (!isValidObjectId(stallId)) {
+    return false;
+  }
+
+  const result = await StallModel.findByIdAndDelete(stallId);
+  return Boolean(result);
+}
+
 export async function canManageStall(stallId: string, actorId: string, actorRole: "student" | "vendor" | "admin") {
   if (!isValidObjectId(stallId)) {
     return false;

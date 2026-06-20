@@ -4,3 +4,4 @@ export { MenuItemModel } from "./menu-item.model";
 export { ReviewModel } from "./review.model";
 export { StallModel } from "./stall.model";
 export { UserModel } from "./user.model";
+export { CategoryModel } from "./category.model";

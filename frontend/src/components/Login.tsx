@@ -11,6 +11,7 @@ export function Login({ onLogin }: LoginProps) {
   const [error, setError] = useState<string | null>(null);
   const [showRegister, setShowRegister] = useState(false);
   const [name, setName] = useState("");
+  const [userType, setUserType] = useState<"student" | "vendor">("student");
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -46,7 +47,7 @@ export function Login({ onLogin }: LoginProps) {
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, role: "student" }),
+        body: JSON.stringify({ name, email, password, role: userType }),
       });
 
       if (!response.ok) {
@@ -80,6 +81,7 @@ export function Login({ onLogin }: LoginProps) {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 disabled={isLoading}
+                required
               />
             </div>
           )}
@@ -105,6 +107,36 @@ export function Login({ onLogin }: LoginProps) {
               required
             />
           </div>
+
+          {showRegister && (
+            <div className="form-group register-type">
+              <label>Account Type:</label>
+              <div className="radio-group">
+                <label>
+                  <input
+                    type="radio"
+                    name="userType"
+                    value="student"
+                    checked={userType === "student"}
+                    onChange={(e) => setUserType(e.target.value as "student")}
+                    disabled={isLoading}
+                  />
+                  <span>Student (Food Buyer)</span>
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="userType"
+                    value="vendor"
+                    checked={userType === "vendor"}
+                    onChange={(e) => setUserType(e.target.value as "vendor")}
+                    disabled={isLoading}
+                  />
+                  <span>Vendor (Food Stall)</span>
+                </label>
+              </div>
+            </div>
+          )}
 
           {error && <div className="login-error">{error}</div>}
 
