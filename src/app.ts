@@ -1,0 +1,21 @@
+import express, { Request, Response } from "express";
+import { authRouter } from "./routes/auth.routes";
+import { favoritesRouter } from "./routes/favorites.routes";
+import { reviewsRouter } from "./routes/reviews.routes";
+import { stallsRouter } from "./routes/stalls.routes";
+
+export function createApp() {
+  const app = express();
+
+  app.use(express.json());
+  app.use("/auth", authRouter);
+  app.use("/reviews", reviewsRouter);
+  app.use("/favorites", favoritesRouter);
+  app.use("/stalls", stallsRouter);
+
+  app.get("/health", (_request: Request, response: Response) => {
+    response.json({ status: "ok", service: "FoodHub API" });
+  });
+
+  return app;
+}

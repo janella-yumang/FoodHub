@@ -1,0 +1,23 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createApp = createApp;
+const express_1 = __importDefault(require("express"));
+const auth_routes_1 = require("./routes/auth.routes");
+const favorites_routes_1 = require("./routes/favorites.routes");
+const reviews_routes_1 = require("./routes/reviews.routes");
+const stalls_routes_1 = require("./routes/stalls.routes");
+function createApp() {
+    const app = (0, express_1.default)();
+    app.use(express_1.default.json());
+    app.use("/auth", auth_routes_1.authRouter);
+    app.use("/reviews", reviews_routes_1.reviewsRouter);
+    app.use("/favorites", favorites_routes_1.favoritesRouter);
+    app.use("/stalls", stalls_routes_1.stallsRouter);
+    app.get("/health", (_request, response) => {
+        response.json({ status: "ok", service: "FoodHub API" });
+    });
+    return app;
+}

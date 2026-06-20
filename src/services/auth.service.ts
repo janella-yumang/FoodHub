@@ -1,0 +1,72 @@
+import bcrypt from "bcryptjs";
+import { isMongoServerError } from "../utils/mongo";
+import { UserModel } from "../models";
+import { signAccessToken } from "../utils/jwt";
+import { getConfig } from "../config/env";
+
+export interface RegisterInput {
+  name: string;
+  email: string;
+  password: string;
+  role?: "student" | "vendor";
+}
+
+export interface LoginInput {
+  email: string;
+  password: string;
+}
+
+export async function registerUser(input: RegisterInput) {
+  const config = getConfig();
+  const passwordHash = await bcrypt.hash(input.password, 10);
+
+  const user = await UserModel.create({
+    name: input.name,
+    email: input.email,
+    passwordHash,
+    role: input.role ?? "student"
+  });
+
+  return {
+    user: {
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      profilePictureUrl: user.profilePictureUrl,
+      isActive: user.isActive
+    },
+    accessToken: signAccessToken({ userId: user._id.toString(), role: user.role }, config.jwtSecret)
+  };
+}
+
+export async function loginUser(input: LoginInput) {
+  const config = getConfig();
+  const user = await UserModel.findOne({ email: input.email.toLowerCase().trim(), isActive: true }).select("+passwordHash");
+
+  if (!user) {
+    return null;
+  }
+
+  const passwordMatches = await bcrypt.compare(input.password, user.passwordHash);
+
+  if (!passwordMatches) {
+    return null;
+  }
+
+  return {
+    user: {
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      profilePictureUrl: user.profilePictureUrl,
+      isActive: user.isActive
+    },
+    accessToken: signAccessToken({ userId: user._id.toString(), role: user.role }, config.jwtSecret)
+  };
+}
+
+export function isDuplicateEmailError(error: unknown): boolean {
+  return isMongoServerError(error) && error.code === 11000;
+}
