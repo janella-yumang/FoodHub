@@ -29,7 +29,7 @@ reviewsRouter.get("/stall/:stallId", async (request: Request, response: Response
 reviewsRouter.post(
   "/",
   authenticateRequest,
-  authorizeRoles("student", "vendor", "admin"),
+  authorizeRoles("user", "vendor", "admin"),
   async (request: Request, response: Response) => {
     if (!request.userId) {
       response.status(401).json({ message: "Unauthorized." });
@@ -88,7 +88,7 @@ reviewsRouter.get("/:reviewId", async (request: Request, response: Response) => 
 reviewsRouter.patch(
   "/:reviewId",
   authenticateRequest,
-  authorizeRoles("student", "vendor", "admin"),
+  authorizeRoles("user", "vendor", "admin"),
   async (request: Request, response: Response) => {
     const reviewId = firstParam(request.params.reviewId);
 
@@ -134,7 +134,7 @@ reviewsRouter.patch(
 reviewsRouter.delete(
   "/:reviewId",
   authenticateRequest,
-  authorizeRoles("student", "vendor", "admin"),
+  authorizeRoles("user", "vendor", "admin"),
   async (request: Request, response: Response) => {
     const reviewId = firstParam(request.params.reviewId);
 

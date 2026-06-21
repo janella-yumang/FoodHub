@@ -3,16 +3,21 @@ import { Login } from "./components/Login";
 import { StallPicker } from "./components/StallPicker";
 import { Menu } from "./components/Menu";
 import { AdminDashboard } from "./components/AdminDashboard";
+import { VendorDashboard } from "./components/VendorDashboard";
+import { Profile } from "./components/Profile";
+import { AboutUs } from "./components/AboutUs";
+import Trends from "./components/Trends";
 
-type AppView = "login" | "stall-picker" | "menu" | "admin";
+type AppView = "login" | "stall-picker" | "menu" | "admin" | "vendor" | "profile" | "about" | "trends";
 
 function App() {
   const [view, setView] = useState<AppView>("login");
   const [token, setToken] = useState<string | null>(null);
-  const [_userId, setUserId] = useState<string | null>(null);
-  const [_role, setRole] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
   const [selectedStallId, setSelectedStallId] = useState<string | null>(null);
   const [selectedStallName, setSelectedStallName] = useState<string | null>(null);
+  const [previousView, setPreviousView] = useState<AppView>("stall-picker");
 
   useEffect(() => {
     // Check for stored auth on mount
@@ -24,7 +29,13 @@ function App() {
       setToken(storedToken);
       setUserId(storedUserId);
       setRole(storedRole);
-      setView(storedRole === "admin" ? "admin" : "stall-picker");
+      if (storedRole === "admin") {
+        setView("admin");
+      } else if (storedRole === "vendor") {
+        setView("vendor");
+      } else {
+        setView("stall-picker");
+      }
     }
   }, []);
 
@@ -35,7 +46,13 @@ function App() {
     localStorage.setItem("token", newToken);
     localStorage.setItem("userId", newUserId);
     localStorage.setItem("role", newRole);
-    setView(newRole === "admin" ? "admin" : "stall-picker");
+    if (newRole === "admin") {
+      setView("admin");
+    } else if (newRole === "vendor") {
+      setView("vendor");
+    } else {
+      setView("stall-picker");
+    }
   };
 
   const handleSelectStall = (stallId: string, stallName: string) => {
@@ -60,7 +77,16 @@ function App() {
     setView("login");
   };
 
-  const profileLabel = _role ? `${_role[0].toUpperCase()}${_role.slice(1)}` : "User";
+  const profileLabel = role ? `${role[0].toUpperCase()}${role.slice(1)}` : "User";
+
+  const handleNavigate = (newView: AppView) => {
+    setPreviousView(view);
+    setView(newView);
+  };
+
+  const handleBackToPrevious = () => {
+    setView(previousView);
+  };
 
   const appHeader = (
     <header className="app-header">
@@ -74,20 +100,20 @@ function App() {
         </div>
 
         <nav className="app-nav" aria-label="Primary navigation">
-          <a href="#home" className="nav-link">
+          <button className="nav-link" onClick={() => handleNavigate("stall-picker")}>
             Home
-          </a>
-          <a href="#trends" className="nav-link">
+          </button>
+          <button className="nav-link" onClick={() => handleNavigate("trends")}>
             Trends
-          </a>
-          <a href="#about" className="nav-link">
+          </button>
+          <button className="nav-link" onClick={() => handleNavigate("about")}>
             About
-          </a>
+          </button>
         </nav>
 
         <div className="header-actions">
           <span className="profile-chip">{profileLabel}</span>
-          <button className="profile-button" type="button">
+          <button className="profile-button" type="button" onClick={() => handleNavigate("profile")}>
             Profile
           </button>
           <button className="logout-button" onClick={handleLogout}>
@@ -130,6 +156,42 @@ function App() {
           {appHeader}
           <main className="app-main">
             <AdminDashboard token={token} />
+          </main>
+        </div>
+      )}
+
+      {view === "vendor" && token && (
+        <div className="app-with-header">
+          {appHeader}
+          <main className="app-main">
+            <VendorDashboard token={token} />
+          </main>
+        </div>
+      )}
+
+      {view === "profile" && token && userId && role && (
+        <div className="app-with-header">
+          {appHeader}
+          <main className="app-main">
+            <Profile token={token} userId={userId} role={role} onBack={handleBackToPrevious} />
+          </main>
+        </div>
+      )}
+
+      {view === "about" && (
+        <div className="app-with-header">
+          {appHeader}
+          <main className="app-main">
+            <AboutUs />
+          </main>
+        </div>
+      )}
+
+      {view === "trends" && (
+        <div className="app-with-header">
+          {appHeader}
+          <main className="app-main">
+            <Trends token={token ?? undefined} onBack={handleBackToPrevious} />
           </main>
         </div>
       )}

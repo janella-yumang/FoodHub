@@ -8,16 +8,24 @@ const userSchema = new Schema(
     role: {
       type: String,
       required: true,
-      enum: ["student", "vendor", "admin"],
-      default: "student"
+      enum: ["user", "vendor", "admin"],
+      default: "user"
     },
     profilePictureUrl: { type: String, trim: true, default: null },
-    isActive: { type: Boolean, default: true }
+    isActive: { type: Boolean, default: true },
+    // Student-specific fields
+    studentId: { type: String, trim: true, default: null },
+    courseSection: { type: String, trim: true, default: null },
+    schoolEmail: { type: String, trim: true, lowercase: true, default: null, sparse: true },
+    // Vendor-specific fields
+    contactNumber: { type: String, trim: true, default: null }
   },
   { timestamps: true }
 );
 
 userSchema.index({ role: 1, isActive: 1 });
+userSchema.index({ studentId: 1 }, { sparse: true });
+userSchema.index({ contactNumber: 1 }, { sparse: true });
 
 export type User = InferSchemaType<typeof userSchema>;
 export const UserModel = model("User", userSchema);

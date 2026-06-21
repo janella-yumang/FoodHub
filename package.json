@@ -5,6 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "dev:frontend": "npm run dev --prefix frontend",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "test": "jest",

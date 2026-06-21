@@ -31,6 +31,22 @@ stallsRouter.get("/", async (request, response) => {
     const stalls = await (0, stall_service_1.listStalls)(query);
     response.json({ stalls });
 });
+// Get stalls for the current vendor
+stallsRouter.get("/vendor/my", auth_1.authenticateRequest, (0, auth_1.authorizeRoles)("vendor", "admin"), async (request, response) => {
+    if (!request.userId) {
+        response.status(401).json({ message: "Unauthorized." });
+        return;
+    }
+    try {
+        const stalls = await (0, stall_service_1.listStalls)({});
+        // Filter to only show stalls owned by the current vendor
+        const vendorStalls = stalls.filter((stall) => stall.vendorId.toString() === request.userId);
+        response.json({ stalls: vendorStalls });
+    }
+    catch (err) {
+        response.status(500).json({ message: "Failed to fetch vendor stalls." });
+    }
+});
 stallsRouter.post("/", auth_1.authenticateRequest, (0, auth_1.authorizeRoles)("vendor", "admin"), async (request, response) => {
     const userId = request.userId;
     const { name, description, location, section, category, photoUrl, openingHours } = request.body;
@@ -178,6 +194,28 @@ stallsRouter.patch("/menu-items/:menuItemId", auth_1.authenticateRequest, (0, au
         return;
     }
     response.json({ menuItem: updatedMenuItem });
+});
+stallsRouter.delete("/:stallId", auth_1.authenticateRequest, (0, auth_1.authorizeRoles)("vendor", "admin"), async (request, response) => {
+    const stallId = firstParam(request.params.stallId);
+    if (!stallId) {
+        response.status(400).json({ message: "Invalid stall id." });
+        return;
+    }
+    if (!request.userId || !request.role) {
+        response.status(401).json({ message: "Unauthorized." });
+        return;
+    }
+    const allowed = await (0, stall_service_1.canManageStall)(stallId, request.userId, request.role);
+    if (!allowed) {
+        response.status(403).json({ message: "You cannot delete this stall." });
+        return;
+    }
+    const deleted = await (0, stall_service_1.deleteStall)(stallId);
+    if (!deleted) {
+        response.status(404).json({ message: "Stall not found." });
+        return;
+    }
+    response.status(204).send();
 });
 stallsRouter.delete("/menu-items/:menuItemId", auth_1.authenticateRequest, (0, auth_1.authorizeRoles)("vendor", "admin"), async (request, response) => {
     if (!request.userId || !request.role) {

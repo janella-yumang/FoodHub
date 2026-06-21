@@ -92,7 +92,7 @@ export async function deleteStall(stallId: string) {
   return Boolean(result);
 }
 
-export async function canManageStall(stallId: string, actorId: string, actorRole: "student" | "vendor" | "admin") {
+export async function canManageStall(stallId: string, actorId: string, actorRole: "user" | "vendor" | "admin") {
   if (!isValidObjectId(stallId)) {
     return false;
   }

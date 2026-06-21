@@ -11,7 +11,34 @@ export function Login({ onLogin }: LoginProps) {
   const [error, setError] = useState<string | null>(null);
   const [showRegister, setShowRegister] = useState(false);
   const [name, setName] = useState("");
-  const [userType, setUserType] = useState<"student" | "vendor">("student");
+  const [userType, setUserType] = useState<"user" | "vendor">("user");
+
+  function getNetworkErrorMessage(): string {
+    return "Cannot reach the server. Start the backend with npm run dev in the project root (port 3000).";
+  }
+
+  async function parseAuthResponse(response: Response): Promise<{ token: string; userId: string; role: string }> {
+    const data = await response.json() as {
+      accessToken?: string;
+      token?: string;
+      message?: string;
+      user?: { id?: string; _id?: string; role?: string };
+    };
+
+    if (!response.ok) {
+      throw new Error(data.message ?? "Request failed");
+    }
+
+    const token = data.accessToken ?? data.token;
+    const userId = data.user?.id ?? data.user?._id;
+    const role = data.user?.role;
+
+    if (!token || !userId || !role) {
+      throw new Error("Invalid response from server");
+    }
+
+    return { token, userId, role };
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -25,14 +52,14 @@ export function Login({ onLogin }: LoginProps) {
         body: JSON.stringify({ email, password }),
       });
 
-      if (!response.ok) {
-        throw new Error("Login failed");
-      }
-
-      const data = await response.json() as { token: string; user: { _id: string; role: string } };
-      onLogin(data.token, data.user._id, data.user.role);
+      const { token, userId, role } = await parseAuthResponse(response);
+      onLogin(token, userId, role);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      if (err instanceof TypeError) {
+        setError(getNetworkErrorMessage());
+      } else {
+        setError(err instanceof Error ? err.message : "Login failed");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -50,14 +77,14 @@ export function Login({ onLogin }: LoginProps) {
         body: JSON.stringify({ name, email, password, role: userType }),
       });
 
-      if (!response.ok) {
-        throw new Error("Registration failed");
-      }
-
-      const data = await response.json() as { token: string; user: { _id: string; role: string } };
-      onLogin(data.token, data.user._id, data.user.role);
+      const { token, userId, role } = await parseAuthResponse(response);
+      onLogin(token, userId, role);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed");
+      if (err instanceof TypeError) {
+        setError(getNetworkErrorMessage());
+      } else {
+        setError(err instanceof Error ? err.message : "Registration failed");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -116,12 +143,12 @@ export function Login({ onLogin }: LoginProps) {
                   <input
                     type="radio"
                     name="userType"
-                    value="student"
-                    checked={userType === "student"}
-                    onChange={(e) => setUserType(e.target.value as "student")}
+                    value="user"
+                    checked={userType === "user"}
+                    onChange={(e) => setUserType(e.target.value as "user")}
                     disabled={isLoading}
                   />
-                  <span>Student (Food Buyer)</span>
+                  <span>User (Food Buyer)</span>
                 </label>
                 <label>
                   <input

@@ -4,6 +4,7 @@ import { getReviewSummary } from "../services/review.service";
 import {
   canManageStall,
   createStall,
+  deleteStall,
   getStallById,
   listStalls,
   updateStall
@@ -49,6 +50,28 @@ stallsRouter.get("/", async (request: Request, response: Response) => {
 
   response.json({ stalls });
 });
+
+// Get stalls for the current vendor
+stallsRouter.get(
+  "/vendor/my",
+  authenticateRequest,
+  authorizeRoles("vendor", "admin"),
+  async (request: Request, response: Response) => {
+    if (!request.userId) {
+      response.status(401).json({ message: "Unauthorized." });
+      return;
+    }
+
+    try {
+      const stalls = await listStalls({});
+      // Filter to only show stalls owned by the current vendor
+      const vendorStalls = stalls.filter((stall: any) => stall.vendorId.toString() === request.userId);
+      response.json({ stalls: vendorStalls });
+    } catch (err) {
+      response.status(500).json({ message: "Failed to fetch vendor stalls." });
+    }
+  }
+);
 
 stallsRouter.post(
   "/",

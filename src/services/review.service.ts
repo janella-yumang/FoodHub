@@ -95,7 +95,7 @@ export async function deleteReview(reviewId: string): Promise<boolean> {
   return Boolean(result);
 }
 
-export async function canManageReview(reviewId: string, actorId: string, actorRole: "student" | "vendor" | "admin") {
+export async function canManageReview(reviewId: string, actorId: string, actorRole: "user" | "vendor" | "admin") {
   if (actorRole === "admin") {
     return true;
   }

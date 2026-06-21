@@ -1,22 +1,16 @@
 import { useEffect, useState } from "react";
 import {
-  type AdminCategoryItem,
   type AdminStallItem,
-  createAdminCategory,
   createAdminMenuItem,
   createAdminStall,
-  deleteAdminCategory,
   deleteAdminStall,
-  fetchAdminCategories,
-  fetchAdminStalls,
-  updateAdminCategory,
+  fetchVendorStalls,
   updateAdminMenuItem,
   updateAdminStall
 } from "../lib/adminApi";
 
 interface VendorDashboardProps {
   token: string;
-  userId: string;
 }
 
 const emptyStall = {
@@ -28,11 +22,6 @@ const emptyStall = {
   openingHours: "",
   photoUrl: "",
   isActive: true
-};
-
-const emptyCategory = {
-  name: "",
-  description: ""
 };
 
 const emptyMenuItem = {
@@ -51,10 +40,9 @@ const emptyMenuItem = {
   isFeatured: false
 };
 
-export function VendorDashboard({ token, userId }: VendorDashboardProps) {
+export function VendorDashboard({ token }: VendorDashboardProps) {
   const [activeTab, setActiveTab] = useState<"stalls" | "products">("stalls");
   const [stalls, setStalls] = useState<AdminStallItem[]>([]);
-  const [categories, setCategories] = useState<AdminCategoryItem[]>([]);
   const [selectedStallId, setSelectedStallId] = useState<string | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [stallForm, setStallForm] = useState(() => ({ ...emptyStall }));
@@ -65,13 +53,8 @@ export function VendorDashboard({ token, userId }: VendorDashboardProps) {
 
   async function loadData() {
     try {
-      const [stallData, categoryData] = await Promise.all([
-        fetchAdminStalls(token),
-        fetchAdminCategories(token)
-      ]);
-      // Filter stalls by vendor
+      const stallData = await fetchVendorStalls(token);
       setStalls(stallData);
-      setCategories(categoryData);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load vendor data.");
@@ -164,17 +147,6 @@ export function VendorDashboard({ token, userId }: VendorDashboardProps) {
       showSuccess("Stall deleted");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete stall.");
-    }
-  };
-
-  const deleteCategory = async (categoryId: string) => {
-    if (!window.confirm("Delete this category?")) return;
-    try {
-      await deleteAdminCategory(token, categoryId);
-      setCategories((prev) => prev.filter((c) => c._id !== categoryId));
-      showSuccess("Category deleted");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete category.");
     }
   };
 

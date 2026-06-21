@@ -4,6 +4,8 @@ import { categoriesRouter } from "./routes/categories.routes";
 import { favoritesRouter } from "./routes/favorites.routes";
 import { reviewsRouter } from "./routes/reviews.routes";
 import { stallsRouter } from "./routes/stalls.routes";
+import { usersRouter } from "./routes/users.routes";
+import { analyticsRouter } from "./routes/analytics.routes";
 
 export function createApp() {
   const app = express();
@@ -14,6 +16,8 @@ export function createApp() {
   app.use("/reviews", reviewsRouter);
   app.use("/favorites", favoritesRouter);
   app.use("/stalls", stallsRouter);
+  app.use("/users", usersRouter);
+  app.use("/analytics", analyticsRouter);
 
   app.get("/health", (_request: Request, response: Response) => {
     response.json({ status: "ok", service: "FoodHub API" });

@@ -8,7 +8,7 @@ export interface RegisterInput {
   name: string;
   email: string;
   password: string;
-  role?: "student" | "vendor";
+  role?: "user" | "vendor";
 }
 
 export interface LoginInput {
@@ -24,7 +24,7 @@ export async function registerUser(input: RegisterInput) {
     name: input.name,
     email: input.email,
     passwordHash,
-    role: input.role ?? "student"
+    role: input.role ?? "user"
   });
 
   return {

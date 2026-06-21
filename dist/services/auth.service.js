@@ -18,7 +18,7 @@ async function registerUser(input) {
         name: input.name,
         email: input.email,
         passwordHash,
-        role: input.role ?? "student"
+        role: input.role ?? "user"
     });
     return {
         user: {

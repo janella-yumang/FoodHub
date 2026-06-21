@@ -22,7 +22,7 @@ reviewsRouter.get("/stall/:stallId", async (request, response) => {
     const summary = await (0, review_service_1.getReviewSummary)(stallId);
     response.json({ reviews, summary });
 });
-reviewsRouter.post("/", auth_1.authenticateRequest, (0, auth_1.authorizeRoles)("student", "vendor", "admin"), async (request, response) => {
+reviewsRouter.post("/", auth_1.authenticateRequest, (0, auth_1.authorizeRoles)("user", "vendor", "admin"), async (request, response) => {
     if (!request.userId) {
         response.status(401).json({ message: "Unauthorized." });
         return;
@@ -61,7 +61,7 @@ reviewsRouter.get("/:reviewId", async (request, response) => {
     }
     response.json({ review });
 });
-reviewsRouter.patch("/:reviewId", auth_1.authenticateRequest, (0, auth_1.authorizeRoles)("student", "vendor", "admin"), async (request, response) => {
+reviewsRouter.patch("/:reviewId", auth_1.authenticateRequest, (0, auth_1.authorizeRoles)("user", "vendor", "admin"), async (request, response) => {
     const reviewId = firstParam(request.params.reviewId);
     if (!reviewId) {
         response.status(400).json({ message: "Invalid review id." });
@@ -88,7 +88,7 @@ reviewsRouter.patch("/:reviewId", auth_1.authenticateRequest, (0, auth_1.authori
     }
     response.json({ review });
 });
-reviewsRouter.delete("/:reviewId", auth_1.authenticateRequest, (0, auth_1.authorizeRoles)("student", "vendor", "admin"), async (request, response) => {
+reviewsRouter.delete("/:reviewId", auth_1.authenticateRequest, (0, auth_1.authorizeRoles)("user", "vendor", "admin"), async (request, response) => {
     const reviewId = firstParam(request.params.reviewId);
     if (!reviewId) {
         response.status(400).json({ message: "Invalid review id." });

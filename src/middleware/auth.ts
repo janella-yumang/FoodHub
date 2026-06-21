@@ -24,7 +24,7 @@ export function authenticateRequest(request: Request, response: Response, next: 
   }
 }
 
-export function authorizeRoles(...allowedRoles: Array<"student" | "vendor" | "admin">) {
+export function authorizeRoles(...allowedRoles: Array<"user" | "vendor" | "admin">) {
   return (request: Request, response: Response, next: NextFunction): void => {
     if (!request.role || !allowedRoles.includes(request.role)) {
       response.status(403).json({ message: "You do not have permission to access this resource." });

@@ -9,7 +9,7 @@ authRouter.post("/register", async (request: Request, response: Response) => {
     name?: string;
     email?: string;
     password?: string;
-    role?: "student" | "vendor";
+    role?: "user" | "vendor";
   };
 
   if (!name || !email || !password) {

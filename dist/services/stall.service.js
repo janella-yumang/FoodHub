@@ -4,6 +4,7 @@ exports.listStalls = listStalls;
 exports.getStallById = getStallById;
 exports.createStall = createStall;
 exports.updateStall = updateStall;
+exports.deleteStall = deleteStall;
 exports.canManageStall = canManageStall;
 const models_1 = require("../models");
 const ids_1 = require("../utils/ids");
@@ -47,6 +48,13 @@ async function updateStall(stallId, updates) {
         return null;
     }
     return models_1.StallModel.findByIdAndUpdate(stallId, { $set: updates }, { new: true }).lean();
+}
+async function deleteStall(stallId) {
+    if (!(0, ids_1.isValidObjectId)(stallId)) {
+        return false;
+    }
+    const result = await models_1.StallModel.findByIdAndDelete(stallId);
+    return Boolean(result);
 }
 async function canManageStall(stallId, actorId, actorRole) {
     if (!(0, ids_1.isValidObjectId)(stallId)) {

@@ -34,7 +34,7 @@ categoriesRouter.post(
       return;
     }
 
-    const category = await createCategory({ name, description });
+    const category = await createCategory({ name, ...(description !== undefined ? { description } : {}) });
     response.status(201).json({ category });
   }
 );

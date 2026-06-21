@@ -67,6 +67,11 @@ export async function fetchAdminStalls(token: string): Promise<AdminStallItem[]>
   return result.stalls;
 }
 
+export async function fetchVendorStalls(token: string): Promise<AdminStallItem[]> {
+  const result = await request<{ stalls: AdminStallItem[] }>("/stalls/vendor/my", {}, token);
+  return result.stalls;
+}
+
 export async function createAdminStall(token: string, input: Partial<AdminStallItem>) {
   return request<{ stall: AdminStallItem }>("/stalls", {
     method: "POST",
@@ -135,7 +140,7 @@ export interface AdminUserItem {
   _id: string;
   name: string;
   email: string;
-  role: "student" | "vendor" | "admin";
+  role: "user" | "vendor" | "admin";
   isActive: boolean;
 }
 

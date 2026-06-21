@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+require("dotenv/config");
 const http_1 = require("http");
 const app_1 = require("./app");
 const database_1 = require("./config/database");
@@ -9,6 +10,7 @@ async function bootstrap() {
     const app = (0, app_1.createApp)();
     const server = (0, http_1.createServer)(app);
     await (0, database_1.connectDatabase)(config.mongoUri);
+    await (0, database_1.ensureCollections)();
     server.listen(config.port, () => {
         console.log(`FoodHub API listening on port ${config.port}`);
     });

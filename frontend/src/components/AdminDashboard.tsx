@@ -62,7 +62,7 @@ export function AdminDashboard({ token }: AdminDashboardProps) {
   const [selectedStallId, setSelectedStallId] = useState<string | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-  const [userForm, setUserForm] = useState<Partial<AdminUserItem>>({ name: "", email: "", role: "student", isActive: true });
+  const [userForm, setUserForm] = useState<Partial<AdminUserItem>>({ name: "", email: "", role: "user", isActive: true });
   const [stallForm, setStallForm] = useState(() => ({ ...emptyStall }));
   const [categoryForm, setCategoryForm] = useState(() => ({ ...emptyCategory }));
   const [menuItemForm, setMenuItemForm] = useState(() => ({ ...emptyMenuItem }));
@@ -103,7 +103,7 @@ export function AdminDashboard({ token }: AdminDashboardProps) {
         setUsers((prev) => prev.map((user) => (user._id === result.user._id ? result.user : user)));
         showSuccess("User updated successfully");
         setSelectedUserId(null);
-        setUserForm({ name: "", email: "", role: "student", isActive: true });
+        setUserForm({ name: "", email: "", role: "user", isActive: true });
         setError(null);
       }
     } catch (err) {
@@ -297,8 +297,8 @@ export function AdminDashboard({ token }: AdminDashboardProps) {
                   </div>
                   <div className="form-group">
                     <label>Role *</label>
-                    <select value={userForm.role ?? "student"} onChange={(e) => setUserForm({ ...userForm, role: e.target.value as "student" | "vendor" | "admin" })} required>
-                      <option value="student">Student</option>
+                    <select value={userForm.role ?? "user"} onChange={(e) => setUserForm({ ...userForm, role: e.target.value as "user" | "vendor" | "admin" })} required>
+                      <option value="user">User</option>
                       <option value="vendor">Vendor</option>
                       <option value="admin">Admin</option>
                     </select>

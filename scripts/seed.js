@@ -27,7 +27,7 @@ async function main() {
       name: "Student Seed",
       email: "student@example.com",
       passwordHash: bcrypt.hashSync("Student123!", 10),
-      role: "student",
+      role: "user",
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date()
