@@ -10,7 +10,8 @@ const stallSchema = new Schema(
     category: { type: String, trim: true, default: "general", index: true },
     photoUrl: { type: String, trim: true, default: null },
     openingHours: { type: String, trim: true, default: "" },
-    isActive: { type: Boolean, default: true }
+    isActive: { type: Boolean, default: true },
+    status: { type: String, enum: ["pending", "approved", "rejected"], default: "approved" }
   },
   { timestamps: true }
 );

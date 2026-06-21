@@ -7,7 +7,7 @@ exports.updateMenuItem = updateMenuItem;
 exports.deleteMenuItem = deleteMenuItem;
 const models_1 = require("../models");
 const ids_1 = require("../utils/ids");
-async function listMenuItems(query) {
+async function listMenuItems(query, populateStall = false) {
     const filters = {};
     if (query.stallId && (0, ids_1.isValidObjectId)(query.stallId)) {
         filters.stallId = query.stallId;
@@ -21,7 +21,11 @@ async function listMenuItems(query) {
     if (query.q) {
         filters.$text = { $search: query.q };
     }
-    return models_1.MenuItemModel.find(filters).sort({ createdAt: -1 }).lean();
+    let q = models_1.MenuItemModel.find(filters).sort({ createdAt: -1 });
+    if (populateStall) {
+        q = q.populate("stallId", "name");
+    }
+    return q.lean();
 }
 async function getMenuItemById(menuItemId) {
     if (!(0, ids_1.isValidObjectId)(menuItemId)) {

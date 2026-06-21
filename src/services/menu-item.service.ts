@@ -47,7 +47,7 @@ export interface UpdateMenuItemInput {
   isFeatured?: boolean | undefined;
 }
 
-export async function listMenuItems(query: MenuItemQuery) {
+export async function listMenuItems(query: MenuItemQuery, populateStall = false) {
   const filters: Record<string, unknown> = {};
 
   if (query.stallId && isValidObjectId(query.stallId)) {
@@ -66,7 +66,11 @@ export async function listMenuItems(query: MenuItemQuery) {
     filters.$text = { $search: query.q };
   }
 
-  return MenuItemModel.find(filters).sort({ createdAt: -1 }).lean();
+  let q = MenuItemModel.find(filters).sort({ createdAt: -1 });
+  if (populateStall) {
+    q = q.populate("stallId", "name");
+  }
+  return q.lean();
 }
 
 export async function getMenuItemById(menuItemId: string) {

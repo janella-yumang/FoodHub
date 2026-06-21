@@ -12,6 +12,8 @@ export function StallPicker({ token, onSelectStall }: StallPickerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [selectedCategory, setSelectedCategory] = useState("All");
+
   useEffect(() => {
     let active = true;
 
@@ -41,19 +43,35 @@ export function StallPicker({ token, onSelectStall }: StallPickerProps) {
     };
   }, [token]);
 
+  const categories = useMemo(() => {
+    const unique = Array.from(
+      new Set(stalls.map((s) => s.category).filter(Boolean))
+    );
+    return ["All", ...unique.map(cat => cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase())];
+  }, [stalls]);
+
   const filteredStalls = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    if (!normalizedQuery) {
-      return stalls;
-    }
-
     return stalls.filter((stall) => {
-      return [stall.name, stall.location, stall.category].some((value) =>
+      // Category filter check
+      if (selectedCategory !== "All") {
+        const stallCat = (stall.category || "general").toLowerCase();
+        if (stallCat !== selectedCategory.toLowerCase()) {
+          return false;
+        }
+      }
+
+      // Query filter check
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      return [stall.name, stall.location, stall.category || "general"].some((value) =>
         value.toLowerCase().includes(normalizedQuery)
       );
     });
-  }, [query, stalls]);
+  }, [query, stalls, selectedCategory]);
 
   return (
     <div className="stall-picker-container">
@@ -72,6 +90,18 @@ export function StallPicker({ token, onSelectStall }: StallPickerProps) {
         />
       </div>
 
+      <div className="stall-category-filters">
+        {categories.map((category) => (
+          <button
+            key={category}
+            className={`stall-filter-chip ${selectedCategory === category ? "active" : ""}`}
+            onClick={() => setSelectedCategory(category)}
+          >
+            {category === "All" ? "🌐 All Stalls" : category}
+          </button>
+        ))}
+      </div>
+
       {isLoading ? (
         <div className="stall-picker-loading">Loading stalls...</div>
       ) : error ? (
@@ -83,15 +113,31 @@ export function StallPicker({ token, onSelectStall }: StallPickerProps) {
           {filteredStalls.map((stall) => (
             <button
               key={stall._id}
-              className="stall-picker-card"
+              className="cute-stall-card"
               onClick={() => onSelectStall(stall._id, stall.name)}
             >
-              <div className="stall-picker-badge">{stall.category}</div>
-              <h3>{stall.name}</h3>
-              <p className="stall-location">{stall.location}</p>
-              <span className={`stall-status ${stall.isActive ? "open" : "closed"}`}>
-                {stall.isActive ? "Open" : "Closed"}
-              </span>
+              {/* Awning */}
+              <div className="cute-stall-awning"></div>
+              
+              {/* Counter/Window */}
+              <div className="cute-stall-window">
+                <div className="cute-stall-counter-ledge"></div>
+                {stall.photoUrl ? (
+                  <img src={stall.photoUrl} alt={stall.name} className="cute-stall-image" />
+                ) : (
+                  <div className="cute-stall-silhouette">🍳</div>
+                )}
+              </div>
+
+              {/* Base Details */}
+              <div className="cute-stall-base">
+                <div className="cute-stall-badge">{stall.category || "General"}</div>
+                <h3>{stall.name}</h3>
+                <p className="cute-stall-location">📍 {stall.location}</p>
+                <span className={`cute-stall-status ${stall.isActive ? "open" : "closed"}`}>
+                  {stall.isActive ? "● Open Now" : "○ Closed"}
+                </span>
+              </div>
             </button>
           ))}
         </div>

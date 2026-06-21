@@ -1,6 +1,8 @@
 import { Router, type Request, type Response } from "express";
 import { authenticateRequest, authorizeRoles } from "../middleware/auth";
 import { listUsers, updateUser } from "../services/user.service";
+import { UserModel } from "../models/user.model";
+import bcrypt from "bcryptjs";
 
 const usersRouter = Router();
 
@@ -85,7 +87,8 @@ usersRouter.patch(
       schoolEmail, 
       contactNumber,
       role, 
-      isActive 
+      isActive,
+      status
     } = request.body as {
       name?: string;
       email?: string;
@@ -96,6 +99,7 @@ usersRouter.patch(
       contactNumber?: string | null;
       role?: "user" | "vendor" | "admin";
       isActive?: boolean;
+      status?: "Active" | "Suspended" | "Pending";
     };
 
     try {
@@ -113,6 +117,10 @@ usersRouter.patch(
       if (request.role === "admin") {
         if (role !== undefined) updates.role = role;
         if (isActive !== undefined) updates.isActive = isActive;
+        if (status !== undefined) {
+          updates.status = status;
+          updates.isActive = status === "Active";
+        }
       }
 
       const user = await updateUser(userId, updates);
@@ -125,6 +133,81 @@ usersRouter.patch(
       response.json(user);
     } catch (error) {
       response.status(500).json({ message: "Failed to update user." });
+    }
+  }
+);
+
+// Create user (admin only)
+usersRouter.post(
+  "/",
+  authenticateRequest,
+  authorizeRoles("admin"),
+  async (request: Request, response: Response) => {
+    const { name, email, password, role, isActive, status } = request.body as {
+      name?: string;
+      email?: string;
+      password?: string;
+      role?: "user" | "vendor" | "admin";
+      isActive?: boolean;
+      status?: "Active" | "Suspended" | "Pending";
+    };
+
+    if (!name || !email || !password) {
+      response.status(400).json({ message: "Name, email, and password are required." });
+      return;
+    }
+
+    try {
+      const passwordHash = await bcrypt.hash(password, 10);
+      const user = await UserModel.create({
+        name,
+        email,
+        passwordHash,
+        role: role ?? "user",
+        status: status ?? "Active",
+        isActive: status ? (status === "Active") : (isActive !== false)
+      });
+      
+      response.status(201).json({
+        user: {
+          _id: user._id.toString(),
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          isActive: user.isActive
+        }
+      });
+    } catch (error) {
+      if (error && (error as any).code === 11000) {
+        response.status(409).json({ message: "An account with that email already exists." });
+        return;
+      }
+      response.status(500).json({ message: "Failed to create user." });
+    }
+  }
+);
+
+// Delete user (admin only)
+usersRouter.delete(
+  "/:userId",
+  authenticateRequest,
+  authorizeRoles("admin"),
+  async (request: Request, response: Response) => {
+    const userId = firstParam(request.params.userId);
+    if (!userId) {
+      response.status(400).json({ message: "Invalid user id." });
+      return;
+    }
+
+    try {
+      const user = await UserModel.findByIdAndDelete(userId);
+      if (!user) {
+        response.status(404).json({ message: "User not found." });
+        return;
+      }
+      response.status(204).end();
+    } catch (error) {
+      response.status(500).json({ message: "Failed to delete user." });
     }
   }
 );

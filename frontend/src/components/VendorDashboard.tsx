@@ -1,12 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   type AdminStallItem,
+  type AdminMenuItem,
+  type AdminCategoryItem,
   createAdminMenuItem,
   createAdminStall,
   deleteAdminStall,
   fetchVendorStalls,
   updateAdminMenuItem,
-  updateAdminStall
+  updateAdminStall,
+  fetchAdminCategories,
+  fetchAdminMenuItemsAll,
+  deleteAdminMenuItem,
+  generateNutritionInfo
 } from "../lib/adminApi";
 
 interface VendorDashboardProps {
@@ -21,7 +27,8 @@ const emptyStall = {
   section: "",
   openingHours: "",
   photoUrl: "",
-  isActive: true
+  isActive: true,
+  status: "pending" as "pending" | "approved" | "rejected"
 };
 
 const emptyMenuItem = {
@@ -37,27 +44,129 @@ const emptyMenuItem = {
   fatGrams: 0,
   sodiumMilligrams: 0,
   isAvailable: true,
-  isFeatured: false
+  isFeatured: false,
+  stallId: "",
+  photoUrl: ""
 };
 
 export function VendorDashboard({ token }: VendorDashboardProps) {
   const [activeTab, setActiveTab] = useState<"stalls" | "products">("stalls");
+  
+  // Data States
   const [stalls, setStalls] = useState<AdminStallItem[]>([]);
+  const [products, setProducts] = useState<AdminMenuItem[]>([]);
+  const [categories, setCategories] = useState<AdminCategoryItem[]>([]);
+
+  // Search/Filter/Pagination States
+  const [searchTerm, setSearchTerm] = useState("");
+  const [stallCategoryFilter, setStallCategoryFilter] = useState("all");
+  const [stallStatusFilter, setStallStatusFilter] = useState("all");
+  const [productCategoryFilter, setProductCategoryFilter] = useState("all");
+  const [productStallFilter, setProductStallFilter] = useState("all");
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
+
+  // Modal States
+  const [activeModal, setActiveModal] = useState<"none" | "stall_create" | "stall_edit" | "product_create" | "product_edit">("none");
   const [selectedStallId, setSelectedStallId] = useState<string | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+
+  // Form States
   const [stallForm, setStallForm] = useState(() => ({ ...emptyStall }));
   const [menuItemForm, setMenuItemForm] = useState(() => ({ ...emptyMenuItem }));
+
+  const [confirmDelete, setConfirmDelete] = useState<{
+    isOpen: boolean;
+    type: "stall" | "product";
+    id: string;
+    name: string;
+  } | null>(null);
+
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [isAutofilling, setIsAutofilling] = useState(false);
+
+  const handleAutofillNutrition = async () => {
+    if (!menuItemForm.name) {
+      setError("Please input the Product Name first.");
+      return;
+    }
+    setIsAutofilling(true);
+    setError(null);
+    try {
+      const data = await generateNutritionInfo(token, menuItemForm.name, menuItemForm.category, menuItemForm.description);
+      setMenuItemForm(prev => ({
+        ...prev,
+        description: data.description,
+        ingredients: data.ingredients.join(", "),
+        allergens: data.allergens.join(", "),
+        calories: data.nutrition.calories,
+        proteinGrams: data.nutrition.proteinGrams,
+        carbsGrams: data.nutrition.carbsGrams,
+        fatGrams: data.nutrition.fatGrams,
+        sodiumMilligrams: data.nutrition.sodiumMilligrams
+      }));
+      showSuccess("Food details and description autofilled successfully!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to autofill food details.");
+    } finally {
+      setIsAutofilling(false);
+    }
+  };
+
+  const handlePhotoUploadChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Image size should be less than 2MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setMenuItemForm(prev => ({
+        ...prev,
+        photoUrl: reader.result as string
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleStallPhotoUploadChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Image size should be less than 2MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setStallForm(prev => ({
+        ...prev,
+        photoUrl: reader.result as string
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
 
   async function loadData() {
     try {
-      const stallData = await fetchVendorStalls(token);
+      const [stallData, productData, categoryData] = await Promise.all([
+        fetchVendorStalls(token),
+        fetchAdminMenuItemsAll(token), // Fetches all, backend will filter vendor's items automatically
+        fetchAdminCategories(token)
+      ]);
       setStalls(stallData);
+      setProducts(productData);
+      setCategories(categoryData);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load vendor data.");
+      setError(err instanceof Error ? err.message : "Failed to load vendor dashboard data.");
     }
   }
 
@@ -65,48 +174,65 @@ export function VendorDashboard({ token }: VendorDashboardProps) {
     void loadData();
   }, [token]);
 
+  // Reset pagination and search when activeTab changes
+  useEffect(() => {
+    setCurrentPage(1);
+    setSearchTerm("");
+  }, [activeTab]);
+
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);
     setTimeout(() => setSuccessMsg(null), 3000);
   };
 
-  const saveStall = async () => {
+  // --- Stalls Actions ---
+  const handleCreateStall = async () => {
     setIsSaving(true);
     try {
-      if (selectedStallId) {
-        const result = await updateAdminStall(token, selectedStallId, stallForm);
-        setStalls((prev) => prev.map((stall) => (stall._id === result.stall._id ? result.stall : stall)));
-        showSuccess("Stall updated successfully");
-      } else {
-        const result = await createAdminStall(token, stallForm);
-        setStalls((prev) => [...prev, result.stall]);
-        showSuccess("Stall created successfully");
-      }
-      setSelectedStallId(null);
+      const result = await createAdminStall(token, { ...stallForm, status: "pending" });
+      setStalls((prev) => [result.stall, ...prev]);
+      setActiveModal("none");
       setStallForm({ ...emptyStall });
-      setError(null);
+      showSuccess("Stall request submitted successfully for approval");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save stall.");
+      setError(err instanceof Error ? err.message : "Failed to create stall.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const saveMenuItem = async () => {
+  const handleEditStall = async () => {
+    if (!selectedStallId) return;
     setIsSaving(true);
     try {
-      if (!selectedStallId && stalls.length > 0) {
-        setError("Select a stall first to add a product.");
-        return;
-      }
+      const result = await updateAdminStall(token, selectedStallId, stallForm);
+      setStalls((prev) => prev.map((s) => (s._id === selectedStallId ? result.stall : s)));
+      setActiveModal("none");
+      setSelectedStallId(null);
+      setStallForm({ ...emptyStall });
+      showSuccess("Stall updated successfully");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update stall.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
+  // --- Products (MenuItems) Actions ---
+  const handleCreateProduct = async () => {
+    if (!menuItemForm.stallId) {
+      setError("Please select a stall for this product.");
+      return;
+    }
+    setIsSaving(true);
+    try {
       const submission = {
         name: menuItemForm.name,
         description: menuItemForm.description,
         price: Number(menuItemForm.price),
         category: menuItemForm.category,
-        ingredients: menuItemForm.ingredients.split(",").map((item) => item.trim()).filter(Boolean),
-        allergens: menuItemForm.allergens.split(",").map((item) => item.trim()).filter(Boolean),
+        ingredients: menuItemForm.ingredients.split(",").map((i) => i.trim()).filter(Boolean),
+        allergens: menuItemForm.allergens.split(",").map((i) => i.trim()).filter(Boolean),
         nutrition: {
           calories: Number(menuItemForm.calories) || 0,
           proteinGrams: Number(menuItemForm.proteinGrams) || 0,
@@ -115,39 +241,138 @@ export function VendorDashboard({ token }: VendorDashboardProps) {
           sodiumMilligrams: Number(menuItemForm.sodiumMilligrams) || 0
         },
         isAvailable: menuItemForm.isAvailable,
-        isFeatured: menuItemForm.isFeatured
+        isFeatured: menuItemForm.isFeatured,
+        photoUrl: menuItemForm.photoUrl || null
       };
 
-      if (selectedProductId) {
-        await updateAdminMenuItem(token, selectedProductId, submission);
-        showSuccess("Product updated successfully");
-      } else {
-        if (!selectedStallId) {
-          throw new Error("Select a stall before adding products.");
-        }
-        await createAdminMenuItem(token, selectedStallId, submission);
-        showSuccess("Product created successfully");
-      }
-      setSelectedProductId(null);
+      await createAdminMenuItem(token, menuItemForm.stallId, submission);
+      setActiveModal("none");
       setMenuItemForm({ ...emptyMenuItem });
-      setError(null);
+      showSuccess("Product created successfully");
       void loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save product.");
+      setError(err instanceof Error ? err.message : "Failed to create product.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const deleteStall = async (stallId: string) => {
-    if (!window.confirm("Delete this stall? This action cannot be undone.")) return;
+  const handleEditProduct = async () => {
+    if (!selectedProductId) return;
+    setIsSaving(true);
     try {
-      await deleteAdminStall(token, stallId);
-      setStalls((prev) => prev.filter((s) => s._id !== stallId));
-      showSuccess("Stall deleted");
+      const submission = {
+        name: menuItemForm.name,
+        description: menuItemForm.description,
+        price: Number(menuItemForm.price),
+        category: menuItemForm.category,
+        ingredients: menuItemForm.ingredients.split(",").map((i) => i.trim()).filter(Boolean),
+        allergens: menuItemForm.allergens.split(",").map((i) => i.trim()).filter(Boolean),
+        nutrition: {
+          calories: Number(menuItemForm.calories) || 0,
+          proteinGrams: Number(menuItemForm.proteinGrams) || 0,
+          carbsGrams: Number(menuItemForm.carbsGrams) || 0,
+          fatGrams: Number(menuItemForm.fatGrams) || 0,
+          sodiumMilligrams: Number(menuItemForm.sodiumMilligrams) || 0
+        },
+        isAvailable: menuItemForm.isAvailable,
+        isFeatured: menuItemForm.isFeatured,
+        photoUrl: menuItemForm.photoUrl || null
+      };
+
+      await updateAdminMenuItem(token, selectedProductId, submission);
+      setActiveModal("none");
+      setSelectedProductId(null);
+      setMenuItemForm({ ...emptyMenuItem });
+      showSuccess("Product updated successfully");
+      void loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete stall.");
+      setError(err instanceof Error ? err.message : "Failed to update product.");
+    } finally {
+      setIsSaving(false);
     }
+  };
+
+  // --- Delete Actions ---
+  const triggerDeleteConfirm = (type: "stall" | "product", id: string, name: string) => {
+    setConfirmDelete({ isOpen: true, type, id, name });
+  };
+
+  const executeDelete = async () => {
+    if (!confirmDelete) return;
+    setIsSaving(true);
+    const { type, id } = confirmDelete;
+    try {
+      if (type === "stall") {
+        await deleteAdminStall(token, id);
+        setStalls((prev) => prev.filter((s) => s._id !== id));
+        showSuccess("Stall deleted successfully");
+      } else if (type === "product") {
+        await deleteAdminMenuItem(token, id);
+        setProducts((prev) => prev.filter((p) => p._id !== id));
+        showSuccess("Product deleted successfully");
+      }
+      setConfirmDelete(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete item.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // --- Search/Filter Logic ---
+  const filteredStalls = useMemo(() => {
+    return stalls.filter((s) => {
+      const matchesSearch =
+        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.section.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = stallCategoryFilter === "all" || s.category === stallCategoryFilter;
+      const status = s.status || (s.isActive ? "approved" : "rejected");
+      const matchesStatus = stallStatusFilter === "all" || status === stallStatusFilter;
+      return matchesSearch && matchesCategory && matchesStatus;
+    });
+  }, [stalls, searchTerm, stallCategoryFilter, stallStatusFilter]);
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      const matchesSearch =
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.description.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = productCategoryFilter === "all" || p.category === productCategoryFilter;
+      
+      const stallIdStr = typeof p.stallId === "object" && p.stallId ? p.stallId._id : p.stallId;
+      const matchesStall = productStallFilter === "all" || stallIdStr === productStallFilter;
+
+      return matchesSearch && matchesCategory && matchesStall;
+    });
+  }, [products, searchTerm, productCategoryFilter, productStallFilter]);
+
+  // --- Pagination Slice ---
+  const currentStalls = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredStalls.slice(start, start + itemsPerPage);
+  }, [filteredStalls, currentPage]);
+
+  const currentProducts = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredProducts.slice(start, start + itemsPerPage);
+  }, [filteredProducts, currentPage]);
+
+  const totalPages = useMemo(() => {
+    let count = 0;
+    if (activeTab === "stalls") count = filteredStalls.length;
+    else if (activeTab === "products") count = filteredProducts.length;
+    return Math.ceil(count / itemsPerPage);
+  }, [activeTab, filteredStalls, filteredProducts]);
+
+  // Get stall name helper
+  const getStallName = (menuItem: AdminMenuItem) => {
+    if (menuItem.stallId && typeof menuItem.stallId === "object") {
+      return menuItem.stallId.name;
+    }
+    const found = stalls.find((s) => s._id === menuItem.stallId);
+    return found ? found.name : "Unknown Stall";
   };
 
   return (
@@ -156,226 +381,996 @@ export function VendorDashboard({ token }: VendorDashboardProps) {
         <div className="admin-header-content">
           <div>
             <h1>Vendor Dashboard</h1>
-            <p>Manage your stalls and menu items</p>
+            <p>Manage your food stalls, active menus, and business stats</p>
           </div>
         </div>
       </header>
 
-      {error && <div className="alert alert-error">{error}</div>}
-      {successMsg && <div className="alert alert-success">{successMsg}</div>}
+      {error && (
+        <div className="alert alert-error">
+          <span>⚠️ {error}</span>
+          <button className="alert-close" onClick={() => setError(null)}>&times;</button>
+        </div>
+      )}
+      {successMsg && (
+        <div className="alert alert-success">
+          <span>✅ {successMsg}</span>
+          <button className="alert-close" onClick={() => setSuccessMsg(null)}>&times;</button>
+        </div>
+      )}
 
       <div className="admin-tabs">
         <button className={`tab-btn ${activeTab === "stalls" ? "active" : ""}`} onClick={() => setActiveTab("stalls")}>
           <span>🏪</span> My Stalls
         </button>
         <button className={`tab-btn ${activeTab === "products" ? "active" : ""}`} onClick={() => setActiveTab("products")}>
-          <span>🍜</span> Products
+          <span>🍜</span> Menu Products
         </button>
       </div>
 
-      <div className="admin-content">
-        {activeTab === "stalls" && (
-          <div className="admin-section">
-            <div className="admin-list-panel">
-              <div className="panel-title">
-                <h2>Your Stalls</h2>
-                <button className="btn-primary" onClick={() => { setSelectedStallId(null); setStallForm({ ...emptyStall }); }}>
-                  + New Stall
-                </button>
-              </div>
-              <ul className="item-list">
-                {stalls.length === 0 ? (
-                  <li className="empty-state">No stalls yet</li>
-                ) : (
-                  stalls.map((stall) => (
-                    <li key={stall._id} className="item-row">
-                      <div className="item-info">
-                        <div className="item-name">{stall.name}</div>
-                        <div className="item-meta">{stall.location} {stall.isActive ? "🟢" : "🔴"}</div>
-                      </div>
-                      <div className="item-actions">
-                        <button className="btn-sm btn-edit" onClick={() => { 
-                          setSelectedStallId(stall._id);
-                          setStallForm({
-                            name: stall.name,
-                            location: stall.location,
-                            category: stall.category,
-                            description: stall.description,
-                            section: stall.section,
-                            openingHours: stall.openingHours,
-                            photoUrl: stall.photoUrl ?? "",
-                            isActive: stall.isActive
-                          });
-                        }}>
-                          Edit
-                        </button>
-                        <button className="btn-sm btn-danger" onClick={() => void deleteStall(stall._id)}>
-                          Delete
-                        </button>
-                      </div>
-                    </li>
-                  ))
-                )}
-              </ul>
-            </div>
-
-            <div className="admin-form-panel">
-              <h3>{selectedStallId ? "Edit Stall" : "Create New Stall"}</h3>
-              <form className="form-grid" onSubmit={(e) => { e.preventDefault(); void saveStall(); }}>
-                <div className="form-group">
-                  <label>Name *</label>
-                  <input value={stallForm.name} onChange={(e) => setStallForm({ ...stallForm, name: e.target.value })} required />
-                </div>
-                <div className="form-group">
-                  <label>Location *</label>
-                  <input value={stallForm.location} onChange={(e) => setStallForm({ ...stallForm, location: e.target.value })} required />
-                </div>
-                <div className="form-group">
-                  <label>Category</label>
-                  <input value={stallForm.category} onChange={(e) => setStallForm({ ...stallForm, category: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label>Section</label>
-                  <input value={stallForm.section} onChange={(e) => setStallForm({ ...stallForm, section: e.target.value })} />
-                </div>
-                <div className="form-group full-width">
-                  <label>Description</label>
-                  <textarea value={stallForm.description} onChange={(e) => setStallForm({ ...stallForm, description: e.target.value })} rows={3} />
-                </div>
-                <div className="form-group">
-                  <label>Opening Hours</label>
-                  <input value={stallForm.openingHours} onChange={(e) => setStallForm({ ...stallForm, openingHours: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label>Photo URL</label>
-                  <input value={stallForm.photoUrl ?? ""} onChange={(e) => setStallForm({ ...stallForm, photoUrl: e.target.value })} />
-                </div>
-                <div className="form-group checkbox">
-                  <label>
-                    <input type="checkbox" checked={stallForm.isActive} onChange={(e) => setStallForm({ ...stallForm, isActive: e.target.checked })} />
-                    Active (Visible to customers)
-                  </label>
-                </div>
-                <button type="submit" className="btn-primary full-width" disabled={isSaving}>
-                  {isSaving ? "Saving..." : "Save Stall"}
-                </button>
-              </form>
+      <div className="admin-content-full">
+        {activeTab === "stalls" && stalls.length >= 1 && (
+          <div className="alert-warning-block" style={{
+            backgroundColor: "#fffde7",
+            border: "1px solid #fff59d",
+            color: "#f57f17",
+            padding: "16px",
+            borderRadius: "6px",
+            marginBottom: "20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            fontSize: "14px"
+          }}>
+            <span style={{ fontSize: "18px" }}>⚠️</span>
+            <div>
+              <strong>Stall Limit Reached:</strong> As a vendor, you are restricted to registering and owning a maximum of <strong>1 food stall</strong>. If you need to modify your existing stall, please click the <strong>Edit</strong> button in the table below.
             </div>
           </div>
         )}
 
-        {activeTab === "products" && (
-          <div className="admin-section">
-            <div className="admin-list-panel">
-              <div className="panel-title">
-                <h2>Menu Items</h2>
-                <button className="btn-primary" onClick={() => { setSelectedProductId(null); setMenuItemForm({ ...emptyMenuItem }); }}>
-                  + New Item
+        {/* TOP CONTROLS & FILTER BAR */}
+        <div className="admin-filters-bar">
+          <div className="search-box">
+            <span>🔍</span>
+            <input
+              type="text"
+              placeholder={`Search ${activeTab}...`}
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+            />
+          </div>
+
+          <div className="filter-dropdowns">
+            {activeTab === "stalls" && (
+              <>
+                <select value={stallCategoryFilter} onChange={(e) => { setStallCategoryFilter(e.target.value); setCurrentPage(1); }}>
+                  <option value="all">All Categories</option>
+                  {Array.from(new Set(stalls.map((s) => s.category))).filter(Boolean).map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+                <select value={stallStatusFilter} onChange={(e) => { setStallStatusFilter(e.target.value); setCurrentPage(1); }}>
+                  <option value="all">All Statuses</option>
+                  <option value="approved">Approved / Active</option>
+                  <option value="pending">Pending Approval</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </>
+            )}
+
+            {activeTab === "products" && (
+              <>
+                <select value={productCategoryFilter} onChange={(e) => { setProductCategoryFilter(e.target.value); setCurrentPage(1); }}>
+                  <option value="all">All Categories</option>
+                  {categories.map((c) => (
+                    <option key={c._id} value={c.name}>{c.name}</option>
+                  ))}
+                </select>
+                <select value={productStallFilter} onChange={(e) => { setProductStallFilter(e.target.value); setCurrentPage(1); }}>
+                  <option value="all">All Stalls</option>
+                  {stalls.map((s) => (
+                    <option key={s._id} value={s._id}>{s.name}</option>
+                  ))}
+                </select>
+              </>
+            )}
+          </div>
+
+          <div className="add-btn-container">
+            {activeTab === "stalls" && (
+              stalls.length >= 1 ? (
+                <button className="btn-teal" disabled title="You can only own a maximum of 1 stall" style={{ opacity: 0.5, cursor: "not-allowed" }}>
+                  + Add Stall
                 </button>
+              ) : (
+                <button className="btn-teal" onClick={() => { setStallForm({ ...emptyStall }); setActiveModal("stall_create"); }}>
+                  + Add Stall
+                </button>
+              )
+            )}
+            {activeTab === "products" && (
+              <button className="btn-teal" onClick={() => { setMenuItemForm({ ...emptyMenuItem }); setActiveModal("product_create"); }}>
+                + Add Product
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* DATA TABLES */}
+        <div className="table-wrapper">
+          {activeTab === "stalls" && (
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Stall Name</th>
+                  <th>Location</th>
+                  <th>Section</th>
+                  <th>Category</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentStalls.length === 0 ? (
+                  <tr><td colSpan={6} className="empty-row">No stalls found. Create a stall to get started!</td></tr>
+                ) : (
+                  currentStalls.map((stall) => {
+                    const status = stall.status || (stall.isActive ? "approved" : "rejected");
+                    return (
+                      <tr key={stall._id}>
+                        <td><strong>{stall.name}</strong></td>
+                        <td>{stall.location}</td>
+                        <td>{stall.section || "-"}</td>
+                        <td><span className="text-tag">{stall.category}</span></td>
+                        <td>
+                          <span className={`badge badge-status-${status}`}>
+                            {status === "approved" ? "Active" : status === "pending" ? "Pending" : "Rejected"}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="table-actions">
+                            <button
+                              className="btn-sm btn-edit"
+                              onClick={() => {
+                                setSelectedStallId(stall._id);
+                                setStallForm({
+                                  name: stall.name,
+                                  location: stall.location,
+                                  category: stall.category,
+                                  description: stall.description,
+                                  section: stall.section,
+                                  openingHours: stall.openingHours,
+                                  photoUrl: stall.photoUrl ?? "",
+                                  isActive: stall.isActive,
+                                  status: status as any
+                                });
+                                setActiveModal("stall_edit");
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="btn-sm btn-danger"
+                              onClick={() => triggerDeleteConfirm("stall", stall._id, stall.name)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {activeTab === "products" && (
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Product Name</th>
+                  <th>Stall</th>
+                  <th>Category</th>
+                  <th>Price</th>
+                  <th>Availability</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentProducts.length === 0 ? (
+                  <tr><td colSpan={6} className="empty-row">No products found. Add a product to showcase in your menu.</td></tr>
+                ) : (
+                  currentProducts.map((p) => {
+                    const stallIdStr = typeof p.stallId === "object" && p.stallId ? p.stallId._id : p.stallId;
+                    return (
+                      <tr key={p._id}>
+                        <td>
+                          <div className="product-cell">
+                            {p.photoUrl && <img src={p.photoUrl} alt={p.name} className="product-thumbnail" />}
+                            <strong>{p.name}</strong>
+                          </div>
+                        </td>
+                        <td>{getStallName(p)}</td>
+                        <td><span className="text-tag">{p.category}</span></td>
+                        <td><strong className="text-teal">Rs. {p.price}</strong></td>
+                        <td>
+                          <span className={`badge badge-availability-${p.isAvailable ? "yes" : "no"}`}>
+                            {p.isAvailable ? "Available" : "Unavailable"}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="table-actions">
+                            <button
+                              className="btn-sm btn-edit"
+                              onClick={() => {
+                                setSelectedProductId(p._id);
+                                setMenuItemForm({
+                                  name: p.name,
+                                  description: p.description,
+                                  price: p.price,
+                                  category: p.category,
+                                  ingredients: Array.isArray(p.ingredients) ? p.ingredients.join(", ") : "",
+                                  allergens: Array.isArray(p.allergens) ? p.allergens.join(", ") : "",
+                                  calories: p.nutrition?.calories ?? 0,
+                                  proteinGrams: p.nutrition?.proteinGrams ?? 0,
+                                  carbsGrams: p.nutrition?.carbsGrams ?? 0,
+                                  fatGrams: p.nutrition?.fatGrams ?? 0,
+                                  sodiumMilligrams: p.nutrition?.sodiumMilligrams ?? 0,
+                                  isAvailable: p.isAvailable,
+                                  isFeatured: p.isFeatured ?? false,
+                                  stallId: stallIdStr ?? "",
+                                  photoUrl: (p as any).photoUrl ?? ""
+                                });
+                                setActiveModal("product_edit");
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="btn-sm btn-danger"
+                              onClick={() => triggerDeleteConfirm("product", p._id, p.name)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* PAGINATION */}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={(page) => setCurrentPage(page)}
+        />
+      </div>
+
+      {/* ================= MODAL DIALOGS ================= */}
+
+      {/* 1. STALL CREATE MODAL */}
+      {activeModal === "stall_create" && (
+        <div className="modal-overlay">
+          <div className="modal-content modal-large">
+            <div className="modal-header">
+              <h3>🏪 Create New Stall</h3>
+              <button className="close-btn" onClick={() => setActiveModal("none")}>&times;</button>
+            </div>
+            <form onSubmit={(e) => { e.preventDefault(); void handleCreateStall(); }} className="modal-grid-form">
+              <div className="form-group">
+                <label>Stall Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={stallForm.name}
+                  onChange={(e) => setStallForm({ ...stallForm, name: e.target.value })}
+                  placeholder="e.g. Gourmet Delights"
+                />
               </div>
-              <div className="stall-selector">
-                <label>Select Stall:</label>
-                <select value={selectedStallId ?? ""} onChange={(e) => setSelectedStallId(e.target.value || null)}>
-                  <option value="">All Stalls</option>
-                  {stalls.map((stall) => (
-                    <option key={stall._id} value={stall._id}>
-                      {stall.name}
-                    </option>
+              <div className="form-group">
+                <label>Location *</label>
+                <input
+                  type="text"
+                  required
+                  value={stallForm.location}
+                  onChange={(e) => setStallForm({ ...stallForm, location: e.target.value })}
+                  placeholder="e.g. Block C, Food Hall"
+                />
+              </div>
+              <div className="form-group">
+                <label>Category *</label>
+                <select
+                  value={stallForm.category}
+                  onChange={(e) => setStallForm({ ...stallForm, category: e.target.value })}
+                >
+                  <option value="general">General</option>
+                  {categories.map((c) => (
+                    <option key={c._id} value={c.name.toLowerCase()}>{c.name}</option>
                   ))}
                 </select>
               </div>
-              <ul className="item-list">
-                {stalls.length === 0 ? (
-                  <li className="empty-state">Create a stall first</li>
-                ) : (
-                  <li className="empty-state">Select a stall to view products</li>
-                )}
-              </ul>
-            </div>
-
-            <div className="admin-form-panel">
-              <h3>{selectedProductId ? "Edit Product" : "Create New Product"}</h3>
-              <form className="form-grid" onSubmit={(e) => { e.preventDefault(); void saveMenuItem(); }}>
-                <div className="form-group full-width">
-                  <label>Stall *</label>
-                  <select value={selectedStallId ?? ""} onChange={(e) => setSelectedStallId(e.target.value)} required>
-                    <option value="">Select a stall</option>
-                    {stalls.map((stall) => (
-                      <option key={stall._id} value={stall._id}>
-                        {stall.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Product Name *</label>
-                  <input value={menuItemForm.name} onChange={(e) => setMenuItemForm({ ...menuItemForm, name: e.target.value })} required />
-                </div>
-                <div className="form-group">
-                  <label>Price *</label>
-                  <input type="number" value={menuItemForm.price} onChange={(e) => setMenuItemForm({ ...menuItemForm, price: Number(e.target.value) })} required />
-                </div>
-                <div className="form-group">
-                  <label>Category</label>
-                  <input value={menuItemForm.category} onChange={(e) => setMenuItemForm({ ...menuItemForm, category: e.target.value })} />
-                </div>
-                <div className="form-group full-width">
-                  <label>Description</label>
-                  <textarea value={menuItemForm.description} onChange={(e) => setMenuItemForm({ ...menuItemForm, description: e.target.value })} rows={2} />
-                </div>
-                <div className="form-group full-width">
-                  <label>Ingredients (comma separated)</label>
-                  <input value={menuItemForm.ingredients} onChange={(e) => setMenuItemForm({ ...menuItemForm, ingredients: e.target.value })} placeholder="e.g., flour, sugar, eggs" />
-                </div>
-                <div className="form-group full-width">
-                  <label>Allergens (comma separated)</label>
-                  <input value={menuItemForm.allergens} onChange={(e) => setMenuItemForm({ ...menuItemForm, allergens: e.target.value })} placeholder="e.g., peanuts, gluten" />
-                </div>
-                <fieldset className="nutrition-section full-width">
-                  <legend>Nutritional Info (per serving)</legend>
-                  <div className="form-grid-2">
-                    <div className="form-group">
-                      <label>Calories</label>
-                      <input type="number" value={menuItemForm.calories} onChange={(e) => setMenuItemForm({ ...menuItemForm, calories: Number(e.target.value) })} />
-                    </div>
-                    <div className="form-group">
-                      <label>Protein (g)</label>
-                      <input type="number" value={menuItemForm.proteinGrams} onChange={(e) => setMenuItemForm({ ...menuItemForm, proteinGrams: Number(e.target.value) })} />
-                    </div>
-                    <div className="form-group">
-                      <label>Carbs (g)</label>
-                      <input type="number" value={menuItemForm.carbsGrams} onChange={(e) => setMenuItemForm({ ...menuItemForm, carbsGrams: Number(e.target.value) })} />
-                    </div>
-                    <div className="form-group">
-                      <label>Fat (g)</label>
-                      <input type="number" value={menuItemForm.fatGrams} onChange={(e) => setMenuItemForm({ ...menuItemForm, fatGrams: Number(e.target.value) })} />
-                    </div>
-                    <div className="form-group">
-                      <label>Sodium (mg)</label>
-                      <input type="number" value={menuItemForm.sodiumMilligrams} onChange={(e) => setMenuItemForm({ ...menuItemForm, sodiumMilligrams: Number(e.target.value) })} />
-                    </div>
+              <div className="form-group">
+                <label>Section</label>
+                <input
+                  type="text"
+                  value={stallForm.section}
+                  onChange={(e) => setStallForm({ ...stallForm, section: e.target.value })}
+                  placeholder="e.g. Stall 4"
+                />
+              </div>
+              <div className="form-group full-width">
+                <label>Description</label>
+                <textarea
+                  value={stallForm.description}
+                  onChange={(e) => setStallForm({ ...stallForm, description: e.target.value })}
+                  placeholder="Describe your stall and foods..."
+                  rows={2}
+                />
+              </div>
+              <div className="form-group">
+                <label>Opening Hours</label>
+                <input
+                  type="text"
+                  value={stallForm.openingHours}
+                  onChange={(e) => setStallForm({ ...stallForm, openingHours: e.target.value })}
+                  placeholder="e.g. 8:00 AM - 6:00 PM"
+                />
+              </div>
+              <div className="form-group">
+                <label>Stall Photo</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleStallPhotoUploadChange}
+                  style={{ padding: "8px 0" }}
+                />
+                {stallForm.photoUrl && (
+                  <div style={{ marginTop: "8px", position: "relative", display: "inline-block" }}>
+                    <img
+                      src={stallForm.photoUrl}
+                      alt="Preview"
+                      style={{ maxWidth: "120px", maxHeight: "120px", borderRadius: "6px", border: "1px solid #ddd", objectFit: "cover" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setStallForm({ ...stallForm, photoUrl: "" })}
+                      style={{
+                        position: "absolute",
+                        top: "-5px",
+                        right: "-5px",
+                        background: "#8B0000",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "50%",
+                        width: "20px",
+                        height: "20px",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}
+                    >
+                      &times;
+                    </button>
                   </div>
-                </fieldset>
-                <div className="form-group checkbox">
-                  <label>
-                    <input type="checkbox" checked={menuItemForm.isAvailable} onChange={(e) => setMenuItemForm({ ...menuItemForm, isAvailable: e.target.checked })} />
-                    Available
-                  </label>
-                </div>
-                <div className="form-group checkbox">
-                  <label>
-                    <input type="checkbox" checked={menuItemForm.isFeatured} onChange={(e) => setMenuItemForm({ ...menuItemForm, isFeatured: e.target.checked })} />
-                    Featured
-                  </label>
-                </div>
-                <button type="submit" className="btn-primary full-width" disabled={isSaving}>
-                  {isSaving ? "Saving..." : "Save Product"}
+                )}
+              </div>
+              <div className="form-group checkbox-group full-width">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={stallForm.isActive}
+                    onChange={(e) => setStallForm({ ...stallForm, isActive: e.target.checked })}
+                  />
+                  Active Toggle (Visible to customers once approved)
+                </label>
+              </div>
+              <div className="modal-actions full-width">
+                <button type="button" className="btn-secondary" onClick={() => setActiveModal("none")}>Cancel</button>
+                <button type="submit" className="btn-teal" disabled={isSaving}>
+                  {isSaving ? "Saving..." : "Submit for Approval"}
                 </button>
-              </form>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 2. STALL EDIT MODAL */}
+      {activeModal === "stall_edit" && (
+        <div className="modal-overlay">
+          <div className="modal-content modal-large">
+            <div className="modal-header">
+              <h3>🏪 Edit Stall Details</h3>
+              <button className="close-btn" onClick={() => setActiveModal("none")}>&times;</button>
+            </div>
+            <form onSubmit={(e) => { e.preventDefault(); void handleEditStall(); }} className="modal-grid-form">
+              <div className="form-group">
+                <label>Stall Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={stallForm.name}
+                  onChange={(e) => setStallForm({ ...stallForm, name: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>Location *</label>
+                <input
+                  type="text"
+                  required
+                  value={stallForm.location}
+                  onChange={(e) => setStallForm({ ...stallForm, location: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>Category *</label>
+                <select
+                  value={stallForm.category}
+                  onChange={(e) => setStallForm({ ...stallForm, category: e.target.value })}
+                >
+                  <option value="general">General</option>
+                  {categories.map((c) => (
+                    <option key={c._id} value={c.name.toLowerCase()}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Section</label>
+                <input
+                  type="text"
+                  value={stallForm.section}
+                  onChange={(e) => setStallForm({ ...stallForm, section: e.target.value })}
+                />
+              </div>
+              <div className="form-group full-width">
+                <label>Description</label>
+                <textarea
+                  value={stallForm.description}
+                  onChange={(e) => setStallForm({ ...stallForm, description: e.target.value })}
+                  rows={2}
+                />
+              </div>
+              <div className="form-group">
+                <label>Opening Hours</label>
+                <input
+                  type="text"
+                  value={stallForm.openingHours}
+                  onChange={(e) => setStallForm({ ...stallForm, openingHours: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>Stall Photo</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleStallPhotoUploadChange}
+                  style={{ padding: "8px 0" }}
+                />
+                {stallForm.photoUrl && (
+                  <div style={{ marginTop: "8px", position: "relative", display: "inline-block" }}>
+                    <img
+                      src={stallForm.photoUrl}
+                      alt="Preview"
+                      style={{ maxWidth: "120px", maxHeight: "120px", borderRadius: "6px", border: "1px solid #ddd", objectFit: "cover" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setStallForm({ ...stallForm, photoUrl: "" })}
+                      style={{
+                        position: "absolute",
+                        top: "-5px",
+                        right: "-5px",
+                        background: "#8B0000",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "50%",
+                        width: "20px",
+                        height: "20px",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="form-group checkbox-group full-width">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={stallForm.isActive}
+                    onChange={(e) => setStallForm({ ...stallForm, isActive: e.target.checked })}
+                  />
+                  Active Toggle
+                </label>
+              </div>
+              <div className="modal-actions full-width">
+                <button type="button" className="btn-secondary" onClick={() => setActiveModal("none")}>Cancel</button>
+                <button type="submit" className="btn-teal" disabled={isSaving}>
+                  {isSaving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 3. PRODUCT CREATE MODAL */}
+      {activeModal === "product_create" && (
+        <div className="modal-overlay">
+          <div className="modal-content modal-large">
+            <div className="modal-header">
+              <h3>🍜 Add New Product</h3>
+              <button className="close-btn" onClick={() => setActiveModal("none")}>&times;</button>
+            </div>
+            <form onSubmit={(e) => { e.preventDefault(); void handleCreateProduct(); }} className="modal-grid-form">
+              <div className="form-group">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                  <label style={{ marginBottom: 0 }}>Product Name *</label>
+                  <button
+                    type="button"
+                    className="btn-ai-autofill"
+                    onClick={handleAutofillNutrition}
+                    disabled={isAutofilling}
+                    style={{
+                      padding: "2px 8px",
+                      fontSize: "11px",
+                      background: "#008080",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px"
+                    }}
+                  >
+                    {isAutofilling ? "⏳ Autofilling..." : "✨ Autofill Description & Nutrition"}
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={menuItemForm.name}
+                  onChange={(e) => setMenuItemForm({ ...menuItemForm, name: e.target.value })}
+                  placeholder="e.g. Spicy Ramen"
+                />
+              </div>
+              <div className="form-group">
+                <label>Stall *</label>
+                <select
+                  required
+                  value={menuItemForm.stallId}
+                  onChange={(e) => setMenuItemForm({ ...menuItemForm, stallId: e.target.value })}
+                >
+                  <option value="">-- Select Stall --</option>
+                  {stalls.map((s) => (
+                    <option key={s._id} value={s._id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Category *</label>
+                <select
+                  required
+                  value={menuItemForm.category}
+                  onChange={(e) => setMenuItemForm({ ...menuItemForm, category: e.target.value })}
+                >
+                  <option value="general">General</option>
+                  {categories.map((c) => (
+                    <option key={c._id} value={c.name.toLowerCase()}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Price (Rs.) *</label>
+                <input
+                  type="number"
+                  required
+                  value={menuItemForm.price || ""}
+                  onChange={(e) => setMenuItemForm({ ...menuItemForm, price: Number(e.target.value) })}
+                  placeholder="e.g. 150"
+                />
+              </div>
+              <div className="form-group full-width">
+                <label>Description</label>
+                <textarea
+                  value={menuItemForm.description}
+                  onChange={(e) => setMenuItemForm({ ...menuItemForm, description: e.target.value })}
+                  placeholder="Describe details, sizing..."
+                  rows={2}
+                />
+              </div>
+              <div className="form-group">
+                <label>Product Photo</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoUploadChange}
+                  style={{ padding: "8px 0" }}
+                />
+                {menuItemForm.photoUrl && (
+                  <div style={{ marginTop: "8px", position: "relative", display: "inline-block" }}>
+                    <img
+                      src={menuItemForm.photoUrl}
+                      alt="Preview"
+                      style={{ maxWidth: "120px", maxHeight: "120px", borderRadius: "6px", border: "1px solid #ddd", objectFit: "cover" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setMenuItemForm({ ...menuItemForm, photoUrl: "" })}
+                      style={{
+                        position: "absolute",
+                        top: "-5px",
+                        right: "-5px",
+                        background: "#8B0000",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "50%",
+                        width: "20px",
+                        height: "20px",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="form-group checkbox-group">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={menuItemForm.isAvailable}
+                    onChange={(e) => setMenuItemForm({ ...menuItemForm, isAvailable: e.target.checked })}
+                  />
+                  Available Toggle
+                </label>
+              </div>
+              <div className="form-group full-width">
+                <label>Ingredients (comma separated)</label>
+                <input
+                  type="text"
+                  value={menuItemForm.ingredients}
+                  onChange={(e) => setMenuItemForm({ ...menuItemForm, ingredients: e.target.value })}
+                  placeholder="e.g. flour, sugar, butter"
+                />
+              </div>
+              <div className="form-group full-width">
+                <label>Allergens (comma separated)</label>
+                <input
+                  type="text"
+                  value={menuItemForm.allergens}
+                  onChange={(e) => setMenuItemForm({ ...menuItemForm, allergens: e.target.value })}
+                  placeholder="e.g. peanuts, gluten"
+                />
+              </div>
+
+              <fieldset className="nutrition-fieldset full-width">
+                <legend>🍎 Nutritional Facts (per serving)</legend>
+                <div className="nutrition-grid">
+                  <div className="form-group">
+                    <label>Calories (kcal)</label>
+                    <input
+                      type="number"
+                      value={menuItemForm.calories || ""}
+                      onChange={(e) => setMenuItemForm({ ...menuItemForm, calories: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Protein (g)</label>
+                    <input
+                      type="number"
+                      value={menuItemForm.proteinGrams || ""}
+                      onChange={(e) => setMenuItemForm({ ...menuItemForm, proteinGrams: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Carbs (g)</label>
+                    <input
+                      type="number"
+                      value={menuItemForm.carbsGrams || ""}
+                      onChange={(e) => setMenuItemForm({ ...menuItemForm, carbsGrams: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Fat (g)</label>
+                    <input
+                      type="number"
+                      value={menuItemForm.fatGrams || ""}
+                      onChange={(e) => setMenuItemForm({ ...menuItemForm, fatGrams: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Sodium (mg)</label>
+                    <input
+                      type="number"
+                      value={menuItemForm.sodiumMilligrams || ""}
+                      onChange={(e) => setMenuItemForm({ ...menuItemForm, sodiumMilligrams: Number(e.target.value) })}
+                    />
+                  </div>
+                </div>
+              </fieldset>
+
+              <div className="modal-actions full-width">
+                <button type="button" className="btn-secondary" onClick={() => setActiveModal("none")}>Cancel</button>
+                <button type="submit" className="btn-teal" disabled={isSaving}>
+                  {isSaving ? "Saving..." : "Add Product"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 4. PRODUCT EDIT MODAL */}
+      {activeModal === "product_edit" && (
+        <div className="modal-overlay">
+          <div className="modal-content modal-large">
+            <div className="modal-header">
+              <h3>🍜 Edit Product Details</h3>
+              <button className="close-btn" onClick={() => setActiveModal("none")}>&times;</button>
+            </div>
+            <form onSubmit={(e) => { e.preventDefault(); void handleEditProduct(); }} className="modal-grid-form">
+              <div className="form-group">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                  <label style={{ marginBottom: 0 }}>Product Name *</label>
+                  <button
+                    type="button"
+                    className="btn-ai-autofill"
+                    onClick={handleAutofillNutrition}
+                    disabled={isAutofilling}
+                    style={{
+                      padding: "2px 8px",
+                      fontSize: "11px",
+                      background: "#008080",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px"
+                    }}
+                  >
+                    {isAutofilling ? "⏳ Autofilling..." : "✨ Autofill Description & Nutrition"}
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={menuItemForm.name}
+                  onChange={(e) => setMenuItemForm({ ...menuItemForm, name: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>Category *</label>
+                <select
+                  required
+                  value={menuItemForm.category}
+                  onChange={(e) => setMenuItemForm({ ...menuItemForm, category: e.target.value })}
+                >
+                  <option value="general">General</option>
+                  {categories.map((c) => (
+                    <option key={c._id} value={c.name.toLowerCase()}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Price (Rs.) *</label>
+                <input
+                  type="number"
+                  required
+                  value={menuItemForm.price || ""}
+                  onChange={(e) => setMenuItemForm({ ...menuItemForm, price: Number(e.target.value) })}
+                />
+              </div>
+              <div className="form-group">
+                <label>Product Photo</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoUploadChange}
+                  style={{ padding: "8px 0" }}
+                />
+                {menuItemForm.photoUrl && (
+                  <div style={{ marginTop: "8px", position: "relative", display: "inline-block" }}>
+                    <img
+                      src={menuItemForm.photoUrl}
+                      alt="Preview"
+                      style={{ maxWidth: "120px", maxHeight: "120px", borderRadius: "6px", border: "1px solid #ddd", objectFit: "cover" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setMenuItemForm({ ...menuItemForm, photoUrl: "" })}
+                      style={{
+                        position: "absolute",
+                        top: "-5px",
+                        right: "-5px",
+                        background: "#8B0000",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "50%",
+                        width: "20px",
+                        height: "20px",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="form-group full-width">
+                <label>Description</label>
+                <textarea
+                  value={menuItemForm.description}
+                  onChange={(e) => setMenuItemForm({ ...menuItemForm, description: e.target.value })}
+                  rows={2}
+                />
+              </div>
+              <div className="form-group checkbox-group full-width">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={menuItemForm.isAvailable}
+                    onChange={(e) => setMenuItemForm({ ...menuItemForm, isAvailable: e.target.checked })}
+                  />
+                  Available Toggle
+                </label>
+              </div>
+              <div className="form-group full-width">
+                <label>Ingredients (comma separated)</label>
+                <input
+                  type="text"
+                  value={menuItemForm.ingredients}
+                  onChange={(e) => setMenuItemForm({ ...menuItemForm, ingredients: e.target.value })}
+                />
+              </div>
+              <div className="form-group full-width">
+                <label>Allergens (comma separated)</label>
+                <input
+                  type="text"
+                  value={menuItemForm.allergens}
+                  onChange={(e) => setMenuItemForm({ ...menuItemForm, allergens: e.target.value })}
+                />
+              </div>
+
+              <fieldset className="nutrition-fieldset full-width">
+                <legend>🍎 Nutritional Facts (per serving)</legend>
+                <div className="nutrition-grid">
+                  <div className="form-group">
+                    <label>Calories (kcal)</label>
+                    <input
+                      type="number"
+                      value={menuItemForm.calories || ""}
+                      onChange={(e) => setMenuItemForm({ ...menuItemForm, calories: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Protein (g)</label>
+                    <input
+                      type="number"
+                      value={menuItemForm.proteinGrams || ""}
+                      onChange={(e) => setMenuItemForm({ ...menuItemForm, proteinGrams: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Carbs (g)</label>
+                    <input
+                      type="number"
+                      value={menuItemForm.carbsGrams || ""}
+                      onChange={(e) => setMenuItemForm({ ...menuItemForm, carbsGrams: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Fat (g)</label>
+                    <input
+                      type="number"
+                      value={menuItemForm.fatGrams || ""}
+                      onChange={(e) => setMenuItemForm({ ...menuItemForm, fatGrams: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Sodium (mg)</label>
+                    <input
+                      type="number"
+                      value={menuItemForm.sodiumMilligrams || ""}
+                      onChange={(e) => setMenuItemForm({ ...menuItemForm, sodiumMilligrams: Number(e.target.value) })}
+                    />
+                  </div>
+                </div>
+              </fieldset>
+
+              <div className="modal-actions full-width">
+                <button type="button" className="btn-secondary" onClick={() => setActiveModal("none")}>Cancel</button>
+                <button type="submit" className="btn-teal" disabled={isSaving}>
+                  {isSaving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 5. DELETE CONFIRMATION MODAL */}
+      {confirmDelete?.isOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content modal-confirm">
+            <div className="modal-header">
+              <h3>⚠️ Confirm Delete</h3>
+              <button className="close-btn" onClick={() => setConfirmDelete(null)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <p>Are you sure you want to delete the {confirmDelete.type} <strong>{confirmDelete.name}</strong>?</p>
+              <p className="warning-text">This action cannot be undone and will permanently remove this item.</p>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn-secondary" onClick={() => setConfirmDelete(null)}>Cancel</button>
+              <button type="button" className="btn-danger" onClick={() => void executeDelete()} disabled={isSaving}>
+                {isSaving ? "Deleting..." : "Confirm Delete"}
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Reusable Pagination Component helper
+function Pagination({
+  currentPage,
+  totalPages,
+  onPageChange
+}: {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="pagination">
+      <button
+        disabled={currentPage === 1}
+        onClick={() => onPageChange(currentPage - 1)}
+        className="pagination-btn"
+      >
+        &larr; Prev
+      </button>
+      <span className="pagination-info">
+        Page {currentPage} of {totalPages}
+      </span>
+      <button
+        disabled={currentPage === totalPages}
+        onClick={() => onPageChange(currentPage + 1)}
+        className="pagination-btn"
+      >
+        Next &rarr;
+      </button>
     </div>
   );
 }

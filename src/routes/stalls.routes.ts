@@ -65,7 +65,12 @@ stallsRouter.get(
     try {
       const stalls = await listStalls({});
       // Filter to only show stalls owned by the current vendor
-      const vendorStalls = stalls.filter((stall: any) => stall.vendorId.toString() === request.userId);
+      const vendorStalls = stalls.filter((stall: any) => {
+        const vendorIdStr = stall.vendorId && typeof stall.vendorId === "object" && "_id" in stall.vendorId
+          ? stall.vendorId._id.toString()
+          : stall.vendorId?.toString();
+        return vendorIdStr === request.userId;
+      });
       response.json({ stalls: vendorStalls });
     } catch (err) {
       response.status(500).json({ message: "Failed to fetch vendor stalls." });
@@ -100,6 +105,21 @@ stallsRouter.post(
       return;
     }
 
+    // A vendor can only own one stall
+    if (request.role === "vendor") {
+      const existingStalls = await listStalls({});
+      const vendorStall = existingStalls.find((s: any) => {
+        const vendorIdStr = s.vendorId && typeof s.vendorId === "object" && "_id" in s.vendorId
+          ? s.vendorId._id.toString()
+          : s.vendorId?.toString();
+        return vendorIdStr === userId;
+      });
+      if (vendorStall) {
+        response.status(400).json({ message: "A vendor can only register one stall." });
+        return;
+      }
+    }
+
     const stall = await createStall({
       vendorId: userId,
       name,
@@ -108,7 +128,8 @@ stallsRouter.post(
       section,
       category,
       photoUrl: photoUrl ?? null,
-      openingHours
+      openingHours,
+      status: request.role === "admin" ? "approved" : "pending"
     });
 
     response.status(201).json({ stall });
@@ -250,6 +271,39 @@ stallsRouter.post(
     }
 
     response.status(201).json({ menuItem });
+  }
+);
+
+stallsRouter.get(
+  "/menu-items/all",
+  authenticateRequest,
+  async (request: Request, response: Response) => {
+    try {
+      let menuItems = await listMenuItems({}, true);
+      
+      if (request.role === "vendor") {
+        const stalls = await listStalls({});
+        const vendorStallIds = stalls
+          .filter((s: any) => {
+            const vendorIdStr = s.vendorId && typeof s.vendorId === "object" && "_id" in s.vendorId
+              ? s.vendorId._id.toString()
+              : s.vendorId?.toString();
+            return vendorIdStr === request.userId;
+          })
+          .map((s: any) => s._id.toString());
+        
+        menuItems = menuItems.filter((item: any) => {
+          const stallIdStr = item.stallId && typeof item.stallId === "object" && "_id" in item.stallId
+            ? item.stallId._id.toString()
+            : item.stallId?.toString();
+          return vendorStallIds.includes(stallIdStr);
+        });
+      }
+      
+      response.json({ menuItems });
+    } catch (err) {
+      response.status(500).json({ message: "Failed to fetch all menu items." });
+    }
   }
 );
 

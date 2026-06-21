@@ -32,7 +32,8 @@ async function updateUser(userId, updates) {
         "schoolEmail",
         "contactNumber",
         "role",
-        "isActive"
+        "isActive",
+        "status"
     ];
     const sanitizedUpdates = {};
     for (const field of allowedFields) {

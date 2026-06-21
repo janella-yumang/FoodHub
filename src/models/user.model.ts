@@ -13,6 +13,11 @@ const userSchema = new Schema(
     },
     profilePictureUrl: { type: String, trim: true, default: null },
     isActive: { type: Boolean, default: true },
+    status: {
+      type: String,
+      enum: ["Active", "Suspended", "Pending"],
+      default: "Active"
+    },
     // Student-specific fields
     studentId: { type: String, trim: true, default: null },
     courseSection: { type: String, trim: true, default: null },

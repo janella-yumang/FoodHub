@@ -275,7 +275,7 @@ export default function Trends({ token, onBack }: TrendsProps) {
                         <div className="item-name">{item.name}</div>
                         <div className="item-stats">
                           {item.rating !== undefined && <span className="stat">⭐ {item.rating.toFixed(1)}</span>}
-                          {item.price !== undefined && <span className="stat">💰 ${item.price.toFixed(2)}</span>}
+                          {item.price !== undefined && <span className="stat">💰 Rs. {item.price}</span>}
                           {item.viewCount !== undefined && <span className="stat">👁️ {item.viewCount.toLocaleString()}</span>}
                           {item.favoriteCount !== undefined && <span className="stat">❤️ {item.favoriteCount.toLocaleString()}</span>}
                           {item.reviewCount !== undefined && <span className="stat">📝 {item.reviewCount}</span>}

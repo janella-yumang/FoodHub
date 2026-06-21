@@ -29,6 +29,25 @@ export function Profile({ token, userId, role, onBack }: ProfileProps) {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  const handlePhotoUploadChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Image size should be less than 2MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFormData(prev => ({
+        ...prev,
+        profilePictureUrl: reader.result as string
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   useEffect(() => {
     loadProfile();
   }, []);
@@ -64,9 +83,7 @@ export function Profile({ token, userId, role, onBack }: ProfileProps) {
         updateData.contactNumber = formData.contactNumber || null;
       }
 
-      if (formData.profilePictureUrl) {
-        updateData.profilePictureUrl = formData.profilePictureUrl;
-      }
+      updateData.profilePictureUrl = formData.profilePictureUrl || null;
 
       const response = await fetch(`/api/users/${userId}`, {
         method: "PATCH",
@@ -292,15 +309,44 @@ export function Profile({ token, userId, role, onBack }: ProfileProps) {
                 )}
 
                 <div className="form-group">
-                  <label>Profile Photo URL</label>
+                  <label>Profile Photo</label>
                   <input
-                    type="url"
-                    placeholder="https://example.com/photo.jpg"
-                    value={formData.profilePictureUrl || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, profilePictureUrl: e.target.value })
-                    }
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoUploadChange}
+                    style={{ padding: "8px 0" }}
                   />
+                  {formData.profilePictureUrl && (
+                    <div style={{ marginTop: "8px", position: "relative", display: "inline-block" }}>
+                      <img
+                        src={formData.profilePictureUrl}
+                        alt="Preview"
+                        style={{ maxWidth: "120px", maxHeight: "120px", borderRadius: "50%", border: "1px solid #ddd", objectFit: "cover" }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, profilePictureUrl: null })}
+                        style={{
+                          position: "absolute",
+                          top: "-5px",
+                          right: "-5px",
+                          background: "#8B0000",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "50%",
+                          width: "20px",
+                          height: "20px",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center"
+                        }}
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-actions">

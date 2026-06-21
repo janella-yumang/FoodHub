@@ -17,6 +17,7 @@ export interface CreateStallInput {
   category?: string | undefined;
   photoUrl?: string | null;
   openingHours?: string | undefined;
+  status?: "pending" | "approved" | "rejected" | undefined;
 }
 
 export interface UpdateStallInput {
@@ -28,6 +29,7 @@ export interface UpdateStallInput {
   photoUrl?: string | null;
   openingHours?: string | undefined;
   isActive?: boolean | undefined;
+  status?: "pending" | "approved" | "rejected" | undefined;
 }
 
 export async function listStalls(query: StallQuery) {
@@ -49,7 +51,7 @@ export async function listStalls(query: StallQuery) {
     filters.$text = { $search: query.q };
   }
 
-  return StallModel.find(filters).sort({ createdAt: -1 }).lean();
+  return StallModel.find(filters).populate("vendorId", "name email").sort({ createdAt: -1 }).lean();
 }
 
 export async function getStallById(stallId: string) {
@@ -57,7 +59,7 @@ export async function getStallById(stallId: string) {
     return null;
   }
 
-  return StallModel.findById(stallId).lean();
+  return StallModel.findById(stallId).populate("vendorId", "name email").lean();
 }
 
 export async function createStall(input: CreateStallInput) {
@@ -69,7 +71,8 @@ export async function createStall(input: CreateStallInput) {
     section: input.section ?? "",
     category: input.category ?? "general",
     photoUrl: input.photoUrl ?? null,
-    openingHours: input.openingHours ?? ""
+    openingHours: input.openingHours ?? "",
+    status: input.status ?? "approved"
   });
 
   return stall.toObject();
@@ -80,7 +83,7 @@ export async function updateStall(stallId: string, updates: UpdateStallInput) {
     return null;
   }
 
-  return StallModel.findByIdAndUpdate(stallId, { $set: updates }, { new: true }).lean();
+  return StallModel.findByIdAndUpdate(stallId, { $set: updates }, { new: true }).populate("vendorId", "name email").lean();
 }
 
 export async function deleteStall(stallId: string) {

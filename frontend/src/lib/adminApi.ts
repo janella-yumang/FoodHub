@@ -34,11 +34,20 @@ export interface AdminStallItem {
   openingHours: string;
   photoUrl?: string | null;
   isActive: boolean;
+  vendorId?: {
+    _id: string;
+    name: string;
+    email: string;
+  } | string;
+  status?: "pending" | "approved" | "rejected";
 }
 
 export interface AdminMenuItem {
   _id: string;
-  stallId: string;
+  stallId: {
+    _id: string;
+    name: string;
+  } | string;
   name: string;
   description: string;
   allergens: string[];
@@ -54,6 +63,7 @@ export interface AdminMenuItem {
   category: string;
   isAvailable: boolean;
   isFeatured: boolean;
+  photoUrl?: string | null;
 }
 
 export interface AdminCategoryItem {
@@ -142,11 +152,20 @@ export interface AdminUserItem {
   email: string;
   role: "user" | "vendor" | "admin";
   isActive: boolean;
+  password?: string;
+  status?: "Active" | "Suspended" | "Pending";
 }
 
 export async function fetchAdminUsers(token: string): Promise<AdminUserItem[]> {
   const result = await request<{ users: AdminUserItem[] }>("/users", {}, token);
   return result.users;
+}
+
+export async function createAdminUser(token: string, input: Partial<AdminUserItem>) {
+  return request<{ user: AdminUserItem }>("/users", {
+    method: "POST",
+    body: JSON.stringify(input)
+  }, token);
 }
 
 export async function updateAdminUser(token: string, userId: string, input: Partial<AdminUserItem>) {
@@ -155,3 +174,60 @@ export async function updateAdminUser(token: string, userId: string, input: Part
     body: JSON.stringify(input)
   }, token);
 }
+
+export async function deleteAdminUser(token: string, userId: string) {
+  return request<void>(`/users/${userId}`, {
+    method: "DELETE"
+  }, token);
+}
+
+export async function fetchAdminMenuItemsAll(token: string): Promise<AdminMenuItem[]> {
+  const result = await request<{ menuItems: AdminMenuItem[] }>("/stalls/menu-items/all", {}, token);
+  return result.menuItems;
+}
+
+export interface AdminAnalyticsStallItem {
+  _id: string;
+  name: string;
+  location: string;
+  category: string;
+  description: string;
+  rating?: number;
+  favoriteCount?: number;
+  reviewCount?: number;
+  averageRating?: number;
+}
+
+export async function fetchTopRatedStalls(token: string): Promise<AdminAnalyticsStallItem[]> {
+  return request<AdminAnalyticsStallItem[]>("/analytics/top-rated-stalls", {}, token);
+}
+
+export async function fetchMostFavoritedStalls(token: string): Promise<AdminAnalyticsStallItem[]> {
+  return request<AdminAnalyticsStallItem[]>("/analytics/most-favorited-stalls", {}, token);
+}
+
+export interface AINutritionResult {
+  description: string;
+  ingredients: string[];
+  allergens: string[];
+  nutrition: {
+    calories: number;
+    proteinGrams: number;
+    carbsGrams: number;
+    fatGrams: number;
+    sodiumMilligrams: number;
+  };
+}
+
+export async function generateNutritionInfo(
+  token: string,
+  name: string,
+  category?: string,
+  description?: string
+): Promise<AINutritionResult> {
+  return request<AINutritionResult>("/ai/generate-nutrition", {
+    method: "POST",
+    body: JSON.stringify({ name, category, description })
+  }, token);
+}
+

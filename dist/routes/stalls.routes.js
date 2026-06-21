@@ -40,7 +40,12 @@ stallsRouter.get("/vendor/my", auth_1.authenticateRequest, (0, auth_1.authorizeR
     try {
         const stalls = await (0, stall_service_1.listStalls)({});
         // Filter to only show stalls owned by the current vendor
-        const vendorStalls = stalls.filter((stall) => stall.vendorId.toString() === request.userId);
+        const vendorStalls = stalls.filter((stall) => {
+            const vendorIdStr = stall.vendorId && typeof stall.vendorId === "object" && "_id" in stall.vendorId
+                ? stall.vendorId._id.toString()
+                : stall.vendorId?.toString();
+            return vendorIdStr === request.userId;
+        });
         response.json({ stalls: vendorStalls });
     }
     catch (err) {
@@ -58,6 +63,20 @@ stallsRouter.post("/", auth_1.authenticateRequest, (0, auth_1.authorizeRoles)("v
         response.status(400).json({ message: "name and location are required." });
         return;
     }
+    // A vendor can only own one stall
+    if (request.role === "vendor") {
+        const existingStalls = await (0, stall_service_1.listStalls)({});
+        const vendorStall = existingStalls.find((s) => {
+            const vendorIdStr = s.vendorId && typeof s.vendorId === "object" && "_id" in s.vendorId
+                ? s.vendorId._id.toString()
+                : s.vendorId?.toString();
+            return vendorIdStr === userId;
+        });
+        if (vendorStall) {
+            response.status(400).json({ message: "A vendor can only register one stall." });
+            return;
+        }
+    }
     const stall = await (0, stall_service_1.createStall)({
         vendorId: userId,
         name,
@@ -66,7 +85,8 @@ stallsRouter.post("/", auth_1.authenticateRequest, (0, auth_1.authorizeRoles)("v
         section,
         category,
         photoUrl: photoUrl ?? null,
-        openingHours
+        openingHours,
+        status: request.role === "admin" ? "approved" : "pending"
     });
     response.status(201).json({ stall });
 });
@@ -154,6 +174,32 @@ stallsRouter.post("/:stallId/menu-items", auth_1.authenticateRequest, (0, auth_1
         return;
     }
     response.status(201).json({ menuItem });
+});
+stallsRouter.get("/menu-items/all", auth_1.authenticateRequest, async (request, response) => {
+    try {
+        let menuItems = await (0, menu_item_service_1.listMenuItems)({}, true);
+        if (request.role === "vendor") {
+            const stalls = await (0, stall_service_1.listStalls)({});
+            const vendorStallIds = stalls
+                .filter((s) => {
+                const vendorIdStr = s.vendorId && typeof s.vendorId === "object" && "_id" in s.vendorId
+                    ? s.vendorId._id.toString()
+                    : s.vendorId?.toString();
+                return vendorIdStr === request.userId;
+            })
+                .map((s) => s._id.toString());
+            menuItems = menuItems.filter((item) => {
+                const stallIdStr = item.stallId && typeof item.stallId === "object" && "_id" in item.stallId
+                    ? item.stallId._id.toString()
+                    : item.stallId?.toString();
+                return vendorStallIds.includes(stallIdStr);
+            });
+        }
+        response.json({ menuItems });
+    }
+    catch (err) {
+        response.status(500).json({ message: "Failed to fetch all menu items." });
+    }
 });
 stallsRouter.get("/menu-items/:menuItemId", async (request, response) => {
     const menuItemId = firstParam(request.params.menuItemId);

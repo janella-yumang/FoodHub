@@ -12,6 +12,7 @@ const reviews_routes_1 = require("./routes/reviews.routes");
 const stalls_routes_1 = require("./routes/stalls.routes");
 const users_routes_1 = require("./routes/users.routes");
 const analytics_routes_1 = require("./routes/analytics.routes");
+const ai_routes_1 = require("./routes/ai.routes");
 function createApp() {
     const app = (0, express_1.default)();
     app.use(express_1.default.json());
@@ -22,6 +23,7 @@ function createApp() {
     app.use("/stalls", stalls_routes_1.stallsRouter);
     app.use("/users", users_routes_1.usersRouter);
     app.use("/analytics", analytics_routes_1.analyticsRouter);
+    app.use("/ai", ai_routes_1.aiRouter);
     app.get("/health", (_request, response) => {
         response.json({ status: "ok", service: "FoodHub API" });
     });

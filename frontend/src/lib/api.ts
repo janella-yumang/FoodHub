@@ -1,33 +1,37 @@
 export interface StallSummary {
-
   _id: string;
-
   name: string;
-
   location: string;
-
   category: string;
-
   photoUrl?: string | null;
-
   isActive: boolean;
-
+  description?: string;
+  openingHours?: string;
+  vendorId?: {
+    name: string;
+    email: string;
+  } | string;
 }
 
 
 
 export interface MenuItemSummary {
-
   _id: string;
-
   name: string;
-
   price: number;
-
   category: string;
-
   isAvailable: boolean;
-
+  description?: string;
+  ingredients?: string[];
+  allergens?: string[];
+  nutrition?: {
+    calories?: number;
+    proteinGrams?: number;
+    carbsGrams?: number;
+    fatGrams?: number;
+    sodiumMilligrams?: number;
+  };
+  photoUrl?: string | null;
 }
 
 

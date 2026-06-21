@@ -14,8 +14,13 @@ const userSchema = new mongoose_1.Schema({
     },
     profilePictureUrl: { type: String, trim: true, default: null },
     isActive: { type: Boolean, default: true },
+    status: {
+        type: String,
+        enum: ["Active", "Suspended", "Pending"],
+        default: "Active"
+    },
     // Student-specific fields
-    studentId: { type: String, trim: true, default: null, sparse: true },
+    studentId: { type: String, trim: true, default: null },
     courseSection: { type: String, trim: true, default: null },
     schoolEmail: { type: String, trim: true, lowercase: true, default: null, sparse: true },
     // Vendor-specific fields

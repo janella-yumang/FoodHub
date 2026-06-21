@@ -11,6 +11,19 @@ exports.getBestValue = getBestValue;
 exports.getMostReviewedStalls = getMostReviewedStalls;
 exports.getNewArrivals = getNewArrivals;
 const models_1 = require("../models");
+const itemProjectionFields = {
+    description: 1,
+    ingredients: 1,
+    allergens: 1,
+    nutrition: 1,
+    photoUrl: 1
+};
+const stallProjectionFields = {
+    description: 1,
+    location: 1,
+    openingHours: 1,
+    photoUrl: 1
+};
 async function getTopRatedStalls(limit = 3) {
     return models_1.StallModel.aggregate([
         {
@@ -41,7 +54,8 @@ async function getTopRatedStalls(limit = 3) {
                 _id: 1,
                 name: 1,
                 rating: { $round: ["$rating", 1] },
-                reviewCount: 1
+                reviewCount: 1,
+                ...stallProjectionFields
             }
         }
     ]);
@@ -77,7 +91,8 @@ async function getTopRatedItems(limit = 3) {
                 name: 1,
                 price: 1,
                 rating: { $round: ["$rating", 1] },
-                reviewCount: 1
+                reviewCount: 1,
+                ...itemProjectionFields
             }
         }
     ]);
@@ -107,7 +122,8 @@ async function getMostPopularItems(limit = 3) {
                 name: 1,
                 price: 1,
                 favoriteCount: 1,
-                viewCount: 1
+                viewCount: 1,
+                ...itemProjectionFields
             }
         }
     ]);
@@ -143,7 +159,8 @@ async function getTrendingThisWeek(limit = 3) {
                 _id: 1,
                 name: 1,
                 price: 1,
-                recentReviewCount: 1
+                recentReviewCount: 1,
+                ...itemProjectionFields
             }
         }
     ]);
@@ -177,7 +194,8 @@ async function getMostFavoritedStalls(limit = 3) {
             $project: {
                 _id: 1,
                 name: 1,
-                favoriteCount: 1
+                favoriteCount: 1,
+                ...stallProjectionFields
             }
         }
     ]);
@@ -212,7 +230,8 @@ async function getMostFavoritedItems(limit = 3) {
                 _id: 1,
                 name: 1,
                 price: 1,
-                favoriteCount: 1
+                favoriteCount: 1,
+                ...itemProjectionFields
             }
         }
     ]);
@@ -227,7 +246,8 @@ async function getCheapestItems(limit = 3) {
                 _id: 1,
                 name: 1,
                 price: 1,
-                category: 1
+                category: 1,
+                ...itemProjectionFields
             }
         }
     ]);
@@ -274,7 +294,8 @@ async function getBestValue(limit = 3) {
                 name: 1,
                 price: 1,
                 rating: { $round: ["$rating", 1] },
-                reviewCount: 1
+                reviewCount: 1,
+                ...itemProjectionFields
             }
         }
     ]);
@@ -301,7 +322,8 @@ async function getMostReviewedStalls(limit = 3) {
             $project: {
                 _id: 1,
                 name: 1,
-                reviewCount: 1
+                reviewCount: 1,
+                ...stallProjectionFields
             }
         }
     ]);
@@ -317,7 +339,8 @@ async function getNewArrivals(limit = 3) {
                 name: 1,
                 price: 1,
                 category: 1,
-                createdAt: 1
+                createdAt: 1,
+                ...itemProjectionFields
             }
         }
     ]);

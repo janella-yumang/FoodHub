@@ -11,6 +11,7 @@ export interface UpdateUserInput {
   contactNumber?: string | null;
   role?: "user" | "vendor" | "admin";
   isActive?: boolean;
+  status?: "Active" | "Suspended" | "Pending";
 }
 
 export async function listUsers() {
@@ -44,7 +45,8 @@ export async function updateUser(userId: string, updates: UpdateUserInput) {
     "schoolEmail",
     "contactNumber",
     "role",
-    "isActive"
+    "isActive",
+    "status"
   ];
   const sanitizedUpdates: Record<string, unknown> = {};
 

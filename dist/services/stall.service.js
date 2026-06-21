@@ -22,13 +22,13 @@ async function listStalls(query) {
     if (query.q) {
         filters.$text = { $search: query.q };
     }
-    return models_1.StallModel.find(filters).sort({ createdAt: -1 }).lean();
+    return models_1.StallModel.find(filters).populate("vendorId", "name email").sort({ createdAt: -1 }).lean();
 }
 async function getStallById(stallId) {
     if (!(0, ids_1.isValidObjectId)(stallId)) {
         return null;
     }
-    return models_1.StallModel.findById(stallId).lean();
+    return models_1.StallModel.findById(stallId).populate("vendorId", "name email").lean();
 }
 async function createStall(input) {
     const stall = await models_1.StallModel.create({
@@ -39,7 +39,8 @@ async function createStall(input) {
         section: input.section ?? "",
         category: input.category ?? "general",
         photoUrl: input.photoUrl ?? null,
-        openingHours: input.openingHours ?? ""
+        openingHours: input.openingHours ?? "",
+        status: input.status ?? "approved"
     });
     return stall.toObject();
 }
@@ -47,7 +48,7 @@ async function updateStall(stallId, updates) {
     if (!(0, ids_1.isValidObjectId)(stallId)) {
         return null;
     }
-    return models_1.StallModel.findByIdAndUpdate(stallId, { $set: updates }, { new: true }).lean();
+    return models_1.StallModel.findByIdAndUpdate(stallId, { $set: updates }, { new: true }).populate("vendorId", "name email").lean();
 }
 async function deleteStall(stallId) {
     if (!(0, ids_1.isValidObjectId)(stallId)) {
