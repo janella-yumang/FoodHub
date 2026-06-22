@@ -7,7 +7,7 @@ const auth_service_1 = require("../services/auth.service");
 const authRouter = (0, express_1.Router)();
 exports.authRouter = authRouter;
 authRouter.post("/register", async (request, response) => {
-    const { name, email, password, role } = request.body;
+    const { name, email, password, role, studentId, courseSection, schoolEmail, contactNumber } = request.body;
     if (!name || !email || !password) {
         response.status(400).json({ message: "name, email, and password are required." });
         return;
@@ -21,7 +21,11 @@ authRouter.post("/register", async (request, response) => {
             name,
             email,
             password,
-            ...(role ? { role } : {})
+            role,
+            studentId,
+            courseSection,
+            schoolEmail,
+            contactNumber
         });
         response.status(201).json(result);
     }

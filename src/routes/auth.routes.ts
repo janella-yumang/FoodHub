@@ -5,11 +5,15 @@ import { isDuplicateEmailError, loginUser, registerUser } from "../services/auth
 const authRouter = Router();
 
 authRouter.post("/register", async (request: Request, response: Response) => {
-  const { name, email, password, role } = request.body as {
+  const { name, email, password, role, studentId, courseSection, schoolEmail, contactNumber } = request.body as {
     name?: string;
     email?: string;
     password?: string;
     role?: "user" | "vendor";
+    studentId?: string;
+    courseSection?: string;
+    schoolEmail?: string;
+    contactNumber?: string;
   };
 
   if (!name || !email || !password) {
@@ -27,7 +31,11 @@ authRouter.post("/register", async (request: Request, response: Response) => {
       name,
       email,
       password,
-      ...(role ? { role } : {})
+      role,
+      studentId,
+      courseSection,
+      schoolEmail,
+      contactNumber
     });
     response.status(201).json(result);
   } catch (error) {

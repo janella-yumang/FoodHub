@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 interface LoginProps {
-  onLogin: (token: string, userId: string, role: string) => void;
+  onLogin: (token: string, userId: string, role: string, name?: string, profilePictureUrl?: string | null) => void;
 }
 
 export function Login({ onLogin }: LoginProps) {
@@ -12,17 +12,21 @@ export function Login({ onLogin }: LoginProps) {
   const [showRegister, setShowRegister] = useState(false);
   const [name, setName] = useState("");
   const [userType, setUserType] = useState<"user" | "vendor">("user");
+  const [studentId, setStudentId] = useState("");
+  const [courseSection, setCourseSection] = useState("");
+  const [schoolEmail, setSchoolEmail] = useState("");
+  const [contactNumber, setContactNumber] = useState("");
 
   function getNetworkErrorMessage(): string {
     return "Cannot reach the server. Start the backend with npm run dev in the project root (port 3000).";
   }
 
-  async function parseAuthResponse(response: Response): Promise<{ token: string; userId: string; role: string }> {
+  async function parseAuthResponse(response: Response): Promise<{ token: string; userId: string; role: string; name?: string; profilePictureUrl?: string | null }> {
     const data = await response.json() as {
       accessToken?: string;
       token?: string;
       message?: string;
-      user?: { id?: string; _id?: string; role?: string };
+      user?: { id?: string; _id?: string; role?: string; name?: string; profilePictureUrl?: string | null };
     };
 
     if (!response.ok) {
@@ -37,7 +41,7 @@ export function Login({ onLogin }: LoginProps) {
       throw new Error("Invalid response from server");
     }
 
-    return { token, userId, role };
+    return { token, userId, role, name: data.user?.name, profilePictureUrl: data.user?.profilePictureUrl };
   }
 
   async function handleLogin(e: React.FormEvent) {
@@ -52,8 +56,8 @@ export function Login({ onLogin }: LoginProps) {
         body: JSON.stringify({ email, password }),
       });
 
-      const { token, userId, role } = await parseAuthResponse(response);
-      onLogin(token, userId, role);
+      const { token, userId, role, name, profilePictureUrl } = await parseAuthResponse(response);
+      onLogin(token, userId, role, name, profilePictureUrl);
     } catch (err) {
       if (err instanceof TypeError) {
         setError(getNetworkErrorMessage());
@@ -74,11 +78,20 @@ export function Login({ onLogin }: LoginProps) {
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, role: userType }),
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          role: userType,
+          studentId: userType === "user" ? studentId : undefined,
+          courseSection: userType === "user" ? courseSection : undefined,
+          schoolEmail: userType === "user" ? schoolEmail : undefined,
+          contactNumber: contactNumber || undefined
+        }),
       });
 
-      const { token, userId, role } = await parseAuthResponse(response);
-      onLogin(token, userId, role);
+      const { token, userId, role, name: userName, profilePictureUrl } = await parseAuthResponse(response);
+      onLogin(token, userId, role, userName, profilePictureUrl);
     } catch (err) {
       if (err instanceof TypeError) {
         setError(getNetworkErrorMessage());
@@ -162,6 +175,64 @@ export function Login({ onLogin }: LoginProps) {
                   <span>Vendor (Food Stall)</span>
                 </label>
               </div>
+            </div>
+          )}
+
+          {showRegister && userType === "user" && (
+            <>
+              <div className="form-group">
+                <input
+                  type="text"
+                  placeholder="Student ID (e.g. TUPM-21-1234)"
+                  value={studentId}
+                  onChange={(e) => setStudentId(e.target.value)}
+                  disabled={isLoading}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <input
+                  type="text"
+                  placeholder="Course & Section (e.g. BSCS-3A)"
+                  value={courseSection}
+                  onChange={(e) => setCourseSection(e.target.value)}
+                  disabled={isLoading}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <input
+                  type="email"
+                  placeholder="School Email (e.g. student@tup.edu.ph)"
+                  value={schoolEmail}
+                  onChange={(e) => setSchoolEmail(e.target.value)}
+                  disabled={isLoading}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <input
+                  type="tel"
+                  placeholder="Contact Number (e.g. 09123456789)"
+                  value={contactNumber}
+                  onChange={(e) => setContactNumber(e.target.value)}
+                  disabled={isLoading}
+                  required
+                />
+              </div>
+            </>
+          )}
+
+          {showRegister && userType === "vendor" && (
+            <div className="form-group">
+              <input
+                type="tel"
+                placeholder="Contact Number (e.g. 09123456789)"
+                value={contactNumber}
+                onChange={(e) => setContactNumber(e.target.value)}
+                disabled={isLoading}
+                required
+              />
             </div>
           )}
 

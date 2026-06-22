@@ -12,6 +12,9 @@ interface ProfileData {
   schoolEmail?: string | null;
   // Vendor fields
   contactNumber?: string | null;
+  // Metadata
+  createdAt?: string;
+  status?: string;
 }
 
 interface ProfileProps {
@@ -19,9 +22,10 @@ interface ProfileProps {
   userId: string;
   role: string;
   onBack: () => void;
+  onProfileUpdate?: (name: string, profilePicUrl: string | null) => void;
 }
 
-export function Profile({ token, userId, role, onBack }: ProfileProps) {
+export function Profile({ token, userId, role, onBack, onProfileUpdate }: ProfileProps) {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<Partial<ProfileData>>({});
@@ -97,10 +101,15 @@ export function Profile({ token, userId, role, onBack }: ProfileProps) {
       if (!response.ok) throw new Error("Failed to save profile");
       const updated = await response.json();
       setProfile(updated);
+      setFormData(updated);
       setIsEditing(false);
       setSuccessMsg("Profile updated successfully!");
       setTimeout(() => setSuccessMsg(null), 3000);
       setError(null);
+      // Notify parent to update header
+      if (onProfileUpdate) {
+        onProfileUpdate(updated.name, updated.profilePictureUrl ?? null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save profile");
     } finally {
@@ -191,31 +200,39 @@ export function Profile({ token, userId, role, onBack }: ProfileProps) {
 
                 {role === "user" && (
                   <>
-                    {profile.studentId && (
-                      <div className="info-field">
-                        <label>Student ID</label>
-                        <p>{profile.studentId}</p>
-                      </div>
-                    )}
-                    {profile.courseSection && (
-                      <div className="info-field">
-                        <label>Course & Section</label>
-                        <p>{profile.courseSection}</p>
-                      </div>
-                    )}
-                    {profile.schoolEmail && (
-                      <div className="info-field">
-                        <label>School Email</label>
-                        <p>{profile.schoolEmail}</p>
-                      </div>
-                    )}
+                    <div className="info-field">
+                      <label>Student ID</label>
+                      <p className={!profile.studentId ? "not-set" : ""}>{profile.studentId || "Not set"}</p>
+                    </div>
+                    <div className="info-field">
+                      <label>Course & Section</label>
+                      <p className={!profile.courseSection ? "not-set" : ""}>{profile.courseSection || "Not set"}</p>
+                    </div>
+                    <div className="info-field">
+                      <label>School Email</label>
+                      <p className={!profile.schoolEmail ? "not-set" : ""}>{profile.schoolEmail || "Not set"}</p>
+                    </div>
                   </>
                 )}
 
-                {role === "vendor" && profile.contactNumber && (
+                {role === "vendor" && (
                   <div className="info-field">
                     <label>Contact Number</label>
-                    <p>{profile.contactNumber}</p>
+                    <p className={!profile.contactNumber ? "not-set" : ""}>{profile.contactNumber || "Not set"}</p>
+                  </div>
+                )}
+
+                {profile.status && (
+                  <div className="info-field">
+                    <label>Account Status</label>
+                    <p><span className={`status-dot status-${profile.status.toLowerCase()}`}></span>{profile.status}</p>
+                  </div>
+                )}
+
+                {profile.createdAt && (
+                  <div className="info-field">
+                    <label>Member Since</label>
+                    <p>{new Date(profile.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
                   </div>
                 )}
 

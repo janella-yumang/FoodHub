@@ -8,7 +8,11 @@ export interface RegisterInput {
   name: string;
   email: string;
   password: string;
-  role?: "user" | "vendor";
+  role?: "user" | "vendor" | undefined;
+  studentId?: string | undefined;
+  courseSection?: string | undefined;
+  schoolEmail?: string | undefined;
+  contactNumber?: string | undefined;
 }
 
 export interface LoginInput {
@@ -24,7 +28,11 @@ export async function registerUser(input: RegisterInput) {
     name: input.name,
     email: input.email,
     passwordHash,
-    role: input.role ?? "user"
+    role: input.role ?? "user",
+    studentId: input.studentId || null,
+    courseSection: input.courseSection || null,
+    schoolEmail: input.schoolEmail || null,
+    contactNumber: input.contactNumber || null
   });
 
   return {

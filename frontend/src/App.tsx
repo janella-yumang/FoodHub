@@ -15,6 +15,8 @@ function App() {
   const [token, setToken] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
+  const [userProfilePic, setUserProfilePic] = useState<string | null>(null);
   const [selectedStallId, setSelectedStallId] = useState<string | null>(null);
   const [selectedStallName, setSelectedStallName] = useState<string | null>(null);
   const [previousView, setPreviousView] = useState<AppView>("stall-picker");
@@ -24,11 +26,15 @@ function App() {
     const storedToken = localStorage.getItem("token");
     const storedUserId = localStorage.getItem("userId");
     const storedRole = localStorage.getItem("role");
+    const storedName = localStorage.getItem("userName");
+    const storedPic = localStorage.getItem("userProfilePic");
 
     if (storedToken && storedUserId && storedRole) {
       setToken(storedToken);
       setUserId(storedUserId);
       setRole(storedRole);
+      setUserName(storedName);
+      setUserProfilePic(storedPic);
       if (storedRole === "admin") {
         setView("admin");
       } else if (storedRole === "vendor") {
@@ -39,13 +45,17 @@ function App() {
     }
   }, []);
 
-  const handleLogin = (newToken: string, newUserId: string, newRole: string) => {
+  const handleLogin = (newToken: string, newUserId: string, newRole: string, newName?: string, newProfilePic?: string | null) => {
     setToken(newToken);
     setUserId(newUserId);
     setRole(newRole);
+    setUserName(newName ?? null);
+    setUserProfilePic(newProfilePic ?? null);
     localStorage.setItem("token", newToken);
     localStorage.setItem("userId", newUserId);
     localStorage.setItem("role", newRole);
+    if (newName) localStorage.setItem("userName", newName);
+    if (newProfilePic) localStorage.setItem("userProfilePic", newProfilePic);
     if (newRole === "admin") {
       setView("admin");
     } else if (newRole === "vendor") {
@@ -71,13 +81,26 @@ function App() {
     localStorage.removeItem("token");
     localStorage.removeItem("userId");
     localStorage.removeItem("role");
+    localStorage.removeItem("userName");
+    localStorage.removeItem("userProfilePic");
     setToken(null);
     setUserId(null);
     setRole(null);
+    setUserName(null);
+    setUserProfilePic(null);
     setView("login");
   };
 
-  const profileLabel = role ? `${role[0].toUpperCase()}${role.slice(1)}` : "User";
+  const handleProfileUpdate = (name: string, profilePicUrl: string | null) => {
+    setUserName(name);
+    setUserProfilePic(profilePicUrl);
+    localStorage.setItem("userName", name);
+    if (profilePicUrl) {
+      localStorage.setItem("userProfilePic", profilePicUrl);
+    } else {
+      localStorage.removeItem("userProfilePic");
+    }
+  };
 
   const handleNavigate = (newView: AppView) => {
     setPreviousView(view);
@@ -112,9 +135,22 @@ function App() {
         </nav>
 
         <div className="header-actions">
-          <span className="profile-chip">{profileLabel}</span>
-          <button className="profile-button" type="button" onClick={() => handleNavigate("profile")}>
-            Profile
+          <button className="header-profile-trigger" type="button" onClick={() => handleNavigate("profile")}>
+            <div
+              className="header-avatar"
+              style={{
+                backgroundImage: userProfilePic
+                  ? `url(${userProfilePic})`
+                  : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                backgroundSize: "cover",
+                backgroundPosition: "center"
+              }}
+            >
+              {!userProfilePic && (
+                <span>{(userName ?? "U").charAt(0).toUpperCase()}</span>
+              )}
+            </div>
+            <span className="header-user-name">{userName ?? "Profile"}</span>
           </button>
           <button className="logout-button" onClick={handleLogout}>
             Logout
@@ -127,6 +163,7 @@ function App() {
   return (
     <div className="app-container">
       {view === "login" && <Login onLogin={handleLogin} />}
+
 
       {view === "stall-picker" && token && (
         <div className="app-with-header">
@@ -173,7 +210,7 @@ function App() {
         <div className="app-with-header">
           {appHeader}
           <main className="app-main">
-            <Profile token={token} userId={userId} role={role} onBack={handleBackToPrevious} />
+            <Profile token={token} userId={userId} role={role} onBack={handleBackToPrevious} onProfileUpdate={handleProfileUpdate} />
           </main>
         </div>
       )}
