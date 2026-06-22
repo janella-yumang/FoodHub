@@ -59,12 +59,16 @@ authRouter.post("/login", async (request: Request, response: Response) => {
   try {
     const result = await loginUser({ email, password });
 
-    if (!result) {
-      response.status(401).json({ message: "Invalid email or password." });
+    if (!result.success) {
+      if (result.reason === "suspended") {
+        response.status(403).json({ message: "Your account has been suspended by an administrator." });
+      } else {
+        response.status(401).json({ message: "Invalid email or password." });
+      }
       return;
     }
 
-    response.json(result);
+    response.json(result.data);
   } catch {
     response.status(500).json({ message: "Failed to log in." });
   }

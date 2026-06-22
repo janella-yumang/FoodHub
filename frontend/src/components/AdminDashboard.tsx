@@ -25,6 +25,7 @@ import {
   fetchMostFavoritedStalls,
   generateNutritionInfo
 } from "../lib/adminApi";
+import { fetchReports, updateReport, type ReportSummary } from "../lib/api";
 
 interface AdminDashboardProps {
   token: string;
@@ -75,7 +76,7 @@ const emptyMenuItem = {
 };
 
 export function AdminDashboard({ token }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"users" | "stalls" | "categories" | "products" | "analytics">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "stalls" | "categories" | "products" | "analytics" | "reports">("users");
   
   // Data States
   const [users, setUsers] = useState<AdminUserItem[]>([]);
@@ -84,6 +85,7 @@ export function AdminDashboard({ token }: AdminDashboardProps) {
   const [products, setProducts] = useState<AdminMenuItem[]>([]);
   const [topRatedStalls, setTopRatedStalls] = useState<AdminAnalyticsStallItem[]>([]);
   const [mostFavoritedStalls, setMostFavoritedStalls] = useState<AdminAnalyticsStallItem[]>([]);
+  const [reports, setReports] = useState<ReportSummary[]>([]);
 
   // Search/Filter/Pagination States
   const [searchTerm, setSearchTerm] = useState("");
@@ -93,19 +95,22 @@ export function AdminDashboard({ token }: AdminDashboardProps) {
   const [stallStatusFilter, setStallStatusFilter] = useState("all");
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
   const [productStallFilter, setProductStallFilter] = useState("all");
+  const [reportStatusFilter, setReportStatusFilter] = useState("all");
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
 
   // Modal States
   const [activeModal, setActiveModal] = useState<
-    "none" | "user_create" | "user_edit" | "stall_create" | "stall_edit" | "category_create" | "category_edit" | "product_create" | "product_edit"
+    "none" | "user_create" | "user_edit" | "stall_create" | "stall_edit" | "category_create" | "category_edit" | "product_create" | "product_edit" | "report_review"
   >("none");
 
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedStallId, setSelectedStallId] = useState<string | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [selectedReport, setSelectedReport] = useState<ReportSummary | null>(null);
+  const [adminNotes, setAdminNotes] = useState("");
 
   // Form States
   const [userForm, setUserForm] = useState<Partial<AdminUserItem>>({ ...emptyUser });
@@ -193,13 +198,14 @@ export function AdminDashboard({ token }: AdminDashboardProps) {
 
   async function loadData() {
     try {
-      const [userData, stallData, categoryData, productData, topStalls, favStalls] = await Promise.all([
+      const [userData, stallData, categoryData, productData, topStalls, favStalls, reportData] = await Promise.all([
         fetchAdminUsers(token),
         fetchAdminStalls(token),
         fetchAdminCategories(token),
         fetchAdminMenuItemsAll(token),
         fetchTopRatedStalls(token).catch(() => []),
-        fetchMostFavoritedStalls(token).catch(() => [])
+        fetchMostFavoritedStalls(token).catch(() => []),
+        fetchReports(token).catch(() => [])
       ]);
       setUsers(userData);
       setStalls(stallData);
@@ -207,6 +213,7 @@ export function AdminDashboard({ token }: AdminDashboardProps) {
       setProducts(productData);
       setTopRatedStalls(topStalls);
       setMostFavoritedStalls(favStalls);
+      setReports(reportData);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load admin data.");
@@ -326,6 +333,53 @@ export function AdminDashboard({ token }: AdminDashboardProps) {
       showSuccess("Stall request rejected");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reject stall.");
+    }
+  };
+
+  // --- Reports Actions ---
+  const handleOpenReportReview = (report: ReportSummary) => {
+    setSelectedReport(report);
+    setAdminNotes(report.adminNotes || "");
+    setError(null);
+    setActiveModal("report_review");
+  };
+
+  const handleResolveReport = async (status: "Resolved" | "Dismissed", suspend: boolean) => {
+    if (!selectedReport) return;
+    setIsSaving(true);
+    setError(null);
+    try {
+      const result = await updateReport(token, selectedReport._id, {
+        status,
+        adminNotes,
+        suspendUser: suspend
+      });
+      setReports((prev) => prev.map((r) => r._id === selectedReport._id ? result.report : r));
+      void loadData();
+      setActiveModal("none");
+      setSelectedReport(null);
+      showSuccess(`Report resolved as ${status}${suspend ? " with user suspension" : ""}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update report.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleReactivateReportUser = async (userId: string) => {
+    if (!selectedReport) return;
+    setIsSaving(true);
+    setError(null);
+    try {
+      await updateAdminUser(token, userId, { status: "Active" });
+      showSuccess("User reactivated successfully");
+      void loadData();
+      setActiveModal("none");
+      setSelectedReport(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reactivate user.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -519,6 +573,20 @@ export function AdminDashboard({ token }: AdminDashboardProps) {
     });
   }, [products, searchTerm, productCategoryFilter, productStallFilter]);
 
+  const filteredReports = useMemo(() => {
+    return reports.filter((r) => {
+      const reporterName = r.reporterId?.name || "";
+      const reportedName = r.reportedUserId?.name || "";
+      const matchesSearch =
+        reporterName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        reportedName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        r.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        r.description.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = reportStatusFilter === "all" || r.status === reportStatusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [reports, searchTerm, reportStatusFilter]);
+
   // --- Pagination Slice ---
   const currentUsers = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -540,14 +608,20 @@ export function AdminDashboard({ token }: AdminDashboardProps) {
     return filteredProducts.slice(start, start + itemsPerPage);
   }, [filteredProducts, currentPage]);
 
+  const currentReports = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredReports.slice(start, start + itemsPerPage);
+  }, [filteredReports, currentPage]);
+
   const totalPages = useMemo(() => {
     let count = 0;
     if (activeTab === "users") count = filteredUsers.length;
     else if (activeTab === "stalls") count = filteredStalls.length;
     else if (activeTab === "categories") count = filteredCategories.length;
     else if (activeTab === "products") count = filteredProducts.length;
+    else if (activeTab === "reports") count = filteredReports.length;
     return Math.ceil(count / itemsPerPage);
-  }, [activeTab, filteredUsers, filteredStalls, filteredCategories, filteredProducts]);
+  }, [activeTab, filteredUsers, filteredStalls, filteredCategories, filteredProducts, filteredReports]);
 
   // Retrieve vendor name helper
   const getVendorName = (stall: AdminStallItem) => {
@@ -666,6 +740,9 @@ export function AdminDashboard({ token }: AdminDashboardProps) {
         <button className={`tab-btn ${activeTab === "analytics" ? "active" : ""}`} onClick={() => setActiveTab("analytics")}>
           <span>📈</span> Analytics
         </button>
+        <button className={`tab-btn ${activeTab === "reports" ? "active" : ""}`} onClick={() => setActiveTab("reports")}>
+          <span>⚠️</span> Reports
+        </button>
       </div>
 
       <div className="admin-content-full">
@@ -732,6 +809,15 @@ export function AdminDashboard({ token }: AdminDashboardProps) {
                     ))}
                   </select>
                 </>
+              )}
+
+              {activeTab === "reports" && (
+                <select value={reportStatusFilter} onChange={(e) => { setReportStatusFilter(e.target.value); setCurrentPage(1); }}>
+                  <option value="all">All Statuses</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Resolved">Resolved</option>
+                  <option value="Dismissed">Dismissed</option>
+                </select>
               )}
             </div>
 
@@ -1192,6 +1278,86 @@ export function AdminDashboard({ token }: AdminDashboardProps) {
                                 Delete
                               </button>
                             </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {activeTab === "reports" && (
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Report Info</th>
+                    <th>Reporter (Vendor)</th>
+                    <th>Reported Student</th>
+                    <th>Reason & Details</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentReports.length === 0 ? (
+                    <tr><td colSpan={6} className="empty-row">No reports found.</td></tr>
+                  ) : (
+                    currentReports.map((r) => {
+                      const reporterName = r.reporterId?.name || "Unknown Vendor";
+                      const studentName = r.reportedUserId?.name || "Unknown Student";
+                      const studentEmail = r.reportedUserId?.email || "";
+                      const userIsActive = r.reportedUserId?.isActive;
+                      const userStatus = r.reportedUserId?.status || (userIsActive ? "Active" : "Suspended");
+
+                      const getReportStatusBadgeClass = (status: string) => {
+                        if (status === "Pending") return "badge badge-status-pending";
+                        if (status === "Resolved") return "badge badge-status-active";
+                        return "badge badge-status-suspended"; // Dismissed
+                      };
+
+                      return (
+                        <tr key={r._id}>
+                          <td>
+                            <div style={{ fontSize: "12px", color: "#666" }}>
+                              <strong>ID:</strong> <span style={{ fontFamily: "monospace" }}>{r._id.substring(r._id.length - 6)}</span>
+                            </div>
+                            <div style={{ fontSize: "11.5px", color: "#888", marginTop: "4px" }}>
+                              {new Date(r.createdAt).toLocaleString()}
+                            </div>
+                          </td>
+                          <td>
+                            <strong>{reporterName}</strong>
+                            <div style={{ fontSize: "11px", color: "#666" }}>{r.reporterId?.email}</div>
+                          </td>
+                          <td>
+                            <strong>{studentName}</strong>
+                            <div style={{ fontSize: "11px", color: "#666" }}>{studentEmail}</div>
+                            <div style={{ marginTop: "4px" }}>
+                              <span className={`badge badge-status-${userStatus.toLowerCase()}`}>
+                                {userStatus}
+                              </span>
+                            </div>
+                          </td>
+                          <td>
+                            <strong style={{ color: "#d9363e", fontSize: "13px" }}>{r.reason}</strong>
+                            <p style={{ margin: "4px 0 0 0", fontSize: "12.5px", color: "#555", lineBreak: "anywhere" }}>
+                              {r.description}
+                            </p>
+                          </td>
+                          <td>
+                            <span className={getReportStatusBadgeClass(r.status)}>
+                              {r.status}
+                            </span>
+                          </td>
+                          <td>
+                            <button
+                              className="btn-sm btn-edit"
+                              onClick={() => handleOpenReportReview(r)}
+                              style={{ display: "flex", alignItems: "center", gap: "4px" }}
+                            >
+                              🔍 Review
+                            </button>
                           </td>
                         </tr>
                       );
@@ -2083,6 +2249,155 @@ export function AdminDashboard({ token }: AdminDashboardProps) {
               <button type="button" className="btn-danger" onClick={() => void executeDelete()} disabled={isSaving}>
                 {isSaving ? "Deleting..." : "Confirm Delete"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 10. REPORT REVIEW & ACTION MODAL */}
+      {activeModal === "report_review" && selectedReport && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: "700px", width: "100%" }}>
+            <div className="modal-header">
+              <h3>🔍 Review Report Details</h3>
+              <button className="close-btn" onClick={() => { setActiveModal("none"); setSelectedReport(null); }}>&times;</button>
+            </div>
+            <div className="modal-body" style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+              
+              {/* Report Information card */}
+              <div style={{ background: "#f9f9f9", padding: "14px", borderRadius: "8px", border: "1px solid #eee" }}>
+                <h4 style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#333", borderBottom: "1px solid #e0e0e0", paddingBottom: "6px" }}>
+                  ⚠️ Infraction Details
+                </h4>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", fontSize: "13px" }}>
+                  <div><strong>Reason:</strong> <span style={{ color: "#d9363e", fontWeight: "600" }}>{selectedReport.reason}</span></div>
+                  <div><strong>Date Filed:</strong> {new Date(selectedReport.createdAt).toLocaleString()}</div>
+                  {selectedReport.orderId && (
+                    <div style={{ gridColumn: "span 2" }}>
+                      <strong>Order Reference:</strong> <span style={{ fontFamily: "monospace" }}>{selectedReport.orderId._id}</span>
+                      {` (Total: Rs. ${selectedReport.orderId.totalAmount} | Method: ${selectedReport.orderId.paymentMethod})`}
+                    </div>
+                  )}
+                  <div style={{ gridColumn: "span 2", marginTop: "6px" }}>
+                    <strong>Description:</strong>
+                    <p style={{ margin: "4px 0 0 0", padding: "8px", background: "#fff", border: "1px solid #ddd", borderRadius: "4px", minHeight: "40px", whiteSpace: "pre-wrap" }}>
+                      {selectedReport.description}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Users Information grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                {/* Reporter */}
+                <div style={{ background: "#e6f7ff", padding: "14px", borderRadius: "8px", border: "1px solid #bae7ff" }}>
+                  <h4 style={{ margin: "0 0 8px 0", fontSize: "13.5px", color: "#0050b3" }}>🏪 Reporter (Vendor)</h4>
+                  <div style={{ fontSize: "13px", lineHeight: "1.4" }}>
+                    <div><strong>Name:</strong> {selectedReport.reporterId?.name || "Unknown Vendor"}</div>
+                    <div><strong>Email:</strong> {selectedReport.reporterId?.email}</div>
+                  </div>
+                </div>
+
+                {/* Reported User */}
+                <div style={{ background: "#fff1f0", padding: "14px", borderRadius: "8px", border: "1px solid #ffa39e" }}>
+                  <h4 style={{ margin: "0 0 8px 0", fontSize: "13.5px", color: "#cf1322" }}>👤 Reported Student</h4>
+                  <div style={{ fontSize: "13px", lineHeight: "1.4" }}>
+                    <div><strong>Name:</strong> {selectedReport.reportedUserId?.name || "Unknown Student"}</div>
+                    <div><strong>Email:</strong> {selectedReport.reportedUserId?.email}</div>
+                    <div><strong>Student ID:</strong> {selectedReport.reportedUserId?.studentId || "N/A"}</div>
+                    <div><strong>Section:</strong> {selectedReport.reportedUserId?.courseSection || "N/A"}</div>
+                    <div><strong>Phone:</strong> {selectedReport.reportedUserId?.contactNumber || "N/A"}</div>
+                    <div style={{ marginTop: "6px" }}>
+                      <strong>Status: </strong>
+                      <span className={`badge badge-status-${(selectedReport.reportedUserId?.status || (selectedReport.reportedUserId?.isActive ? "Active" : "Suspended")).toLowerCase()}`}>
+                        {selectedReport.reportedUserId?.status || (selectedReport.reportedUserId?.isActive ? "Active" : "Suspended")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Admin decision area */}
+              <div className="form-group" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "13px", fontWeight: "600", color: "#333" }}>Admin Resolution Notes *</label>
+                <textarea
+                  required
+                  value={adminNotes}
+                  onChange={(e) => setAdminNotes(e.target.value)}
+                  placeholder="Provide brief notes explaining the resolution, review findings, or reason for suspension/dismissal..."
+                  style={{ padding: "10px", borderRadius: "6px", border: "1px solid #ccc", minHeight: "80px", resize: "vertical", fontSize: "14px" }}
+                />
+              </div>
+
+            </div>
+
+            {/* Actions Footer */}
+            <div className="modal-actions" style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", padding: "16px 20px", borderTop: "1px solid #eee" }}>
+              <div>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => { setActiveModal("none"); setSelectedReport(null); }}
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <div style={{ display: "flex", gap: "8px" }}>
+                {selectedReport.status === "Pending" && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => void handleResolveReport("Dismissed", false)}
+                      disabled={isSaving || !adminNotes.trim()}
+                      title={!adminNotes.trim() ? "Admin notes are required to resolve a report" : ""}
+                    >
+                      Dismiss Report
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => void handleResolveReport("Resolved", false)}
+                      disabled={isSaving || !adminNotes.trim()}
+                      style={{ background: "#f0f0f0", color: "#333", border: "1px solid #ccc" }}
+                      title={!adminNotes.trim() ? "Admin notes are required to resolve a report" : ""}
+                    >
+                      Resolve (Keep Active)
+                    </button>
+                    {(selectedReport.reportedUserId?.isActive || selectedReport.reportedUserId?.status !== "Suspended") && (
+                      <button
+                        type="button"
+                        className="btn-danger"
+                        onClick={() => void handleResolveReport("Resolved", true)}
+                        disabled={isSaving || !adminNotes.trim()}
+                        title={!adminNotes.trim() ? "Admin notes are required to resolve a report" : ""}
+                      >
+                        🚫 Resolve & Suspend Student
+                      </button>
+                    )}
+                  </>
+                )}
+                {/* Reactivation Button: if student status is currently Suspended or isActive is false */}
+                {(!selectedReport.reportedUserId?.isActive || selectedReport.reportedUserId?.status === "Suspended") && (
+                  <button
+                    type="button"
+                    onClick={() => void handleReactivateReportUser(selectedReport.reportedUserId?._id)}
+                    disabled={isSaving}
+                    style={{
+                      background: "#e8f5e9",
+                      color: "#2e7d32",
+                      border: "1px solid #a5d6a7",
+                      padding: "8px 16px",
+                      borderRadius: "6px",
+                      fontWeight: "600",
+                      cursor: "pointer"
+                    }}
+                  >
+                    ✅ Reactivate Student Account
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -50,28 +50,35 @@ export async function registerUser(input: RegisterInput) {
 
 export async function loginUser(input: LoginInput) {
   const config = getConfig();
-  const user = await UserModel.findOne({ email: input.email.toLowerCase().trim(), isActive: true }).select("+passwordHash");
+  const user = await UserModel.findOne({ email: input.email.toLowerCase().trim() }).select("+passwordHash");
 
   if (!user) {
-    return null;
+    return { success: false, reason: "invalid_credentials" };
+  }
+
+  if (user.status === "Suspended" || !user.isActive) {
+    return { success: false, reason: "suspended" };
   }
 
   const passwordMatches = await bcrypt.compare(input.password, user.passwordHash);
 
   if (!passwordMatches) {
-    return null;
+    return { success: false, reason: "invalid_credentials" };
   }
 
   return {
-    user: {
-      id: user._id.toString(),
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      profilePictureUrl: user.profilePictureUrl,
-      isActive: user.isActive
-    },
-    accessToken: signAccessToken({ userId: user._id.toString(), role: user.role }, config.jwtSecret)
+    success: true,
+    data: {
+      user: {
+        id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        profilePictureUrl: user.profilePictureUrl,
+        isActive: user.isActive
+      },
+      accessToken: signAccessToken({ userId: user._id.toString(), role: user.role }, config.jwtSecret)
+    }
   };
 }
 

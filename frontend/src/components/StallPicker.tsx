@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchStalls, type StallSummary } from "../lib/api";
 
 interface StallPickerProps {
-  token: string;
+  token?: string | null;
   onSelectStall: (stallId: string, stallName: string) => void;
 }
 
@@ -20,7 +20,7 @@ export function StallPicker({ token, onSelectStall }: StallPickerProps) {
     async function loadStalls() {
       try {
         setIsLoading(true);
-        const result = await fetchStalls(token);
+        const result = await fetchStalls(token ?? undefined);
         if (!active) {
           return;
         }

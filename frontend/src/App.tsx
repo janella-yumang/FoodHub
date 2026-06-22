@@ -7,11 +7,12 @@ import { VendorDashboard } from "./components/VendorDashboard";
 import { Profile } from "./components/Profile";
 import { AboutUs } from "./components/AboutUs";
 import Trends from "./components/Trends";
+import { OrdersList } from "./components/OrdersList";
 
-type AppView = "login" | "stall-picker" | "menu" | "admin" | "vendor" | "profile" | "about" | "trends";
+type AppView = "login" | "stall-picker" | "menu" | "admin" | "vendor" | "profile" | "about" | "trends" | "orders";
 
 function App() {
-  const [view, setView] = useState<AppView>("login");
+  const [view, setView] = useState<AppView>("stall-picker");
   const [token, setToken] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
@@ -129,32 +130,45 @@ function App() {
           <button className="nav-link" onClick={() => handleNavigate("trends")}>
             Trends
           </button>
+          {token && role === "user" && (
+            <button className="nav-link" onClick={() => handleNavigate("orders")}>
+              My Orders
+            </button>
+          )}
           <button className="nav-link" onClick={() => handleNavigate("about")}>
             About
           </button>
         </nav>
 
         <div className="header-actions">
-          <button className="header-profile-trigger" type="button" onClick={() => handleNavigate("profile")}>
-            <div
-              className="header-avatar"
-              style={{
-                backgroundImage: userProfilePic
-                  ? `url(${userProfilePic})`
-                  : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                backgroundSize: "cover",
-                backgroundPosition: "center"
-              }}
-            >
-              {!userProfilePic && (
-                <span>{(userName ?? "U").charAt(0).toUpperCase()}</span>
-              )}
-            </div>
-            <span className="header-user-name">{userName ?? "Profile"}</span>
-          </button>
-          <button className="logout-button" onClick={handleLogout}>
-            Logout
-          </button>
+          {token ? (
+            <>
+              <button className="header-profile-trigger" type="button" onClick={() => handleNavigate("profile")}>
+                <div
+                  className="header-avatar"
+                  style={{
+                    backgroundImage: userProfilePic
+                      ? `url(${userProfilePic})`
+                      : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                    backgroundSize: "cover",
+                    backgroundPosition: "center"
+                  }}
+                >
+                  {!userProfilePic && (
+                    <span>{(userName ?? "U").charAt(0).toUpperCase()}</span>
+                  )}
+                </div>
+                <span className="header-user-name">{userName ?? "Profile"}</span>
+              </button>
+              <button className="logout-button" onClick={handleLogout}>
+                Logout
+              </button>
+            </>
+          ) : (
+            <button className="logout-button" onClick={() => handleNavigate("login")} style={{ background: "#008080" }}>
+              Login
+            </button>
+          )}
         </div>
       </div>
     </header>
@@ -162,27 +176,33 @@ function App() {
 
   return (
     <div className="app-container">
-      {view === "login" && <Login onLogin={handleLogin} />}
+      {view === "login" && (
+          <Login 
+            onLogin={handleLogin} 
+            onBackToHome={() => setView("stall-picker")} 
+          />
+      )}
 
 
-      {view === "stall-picker" && token && (
+      {view === "stall-picker" && (
         <div className="app-with-header">
           {appHeader}
           <main className="app-main">
-            <StallPicker token={token} onSelectStall={handleSelectStall} />
+            <StallPicker token={token ?? undefined} onSelectStall={handleSelectStall} />
           </main>
         </div>
       )}
 
-      {view === "menu" && token && selectedStallId && selectedStallName && (
+      {view === "menu" && selectedStallId && selectedStallName && (
         <div className="app-with-header">
           {appHeader}
           <main className="app-main">
             <Menu
-              token={token}
+              token={token ?? undefined}
               stallId={selectedStallId}
               stallName={selectedStallName}
               onBack={handleBackToStallPicker}
+              onRequireLogin={() => setView("login")}
             />
           </main>
         </div>
@@ -211,6 +231,15 @@ function App() {
           {appHeader}
           <main className="app-main">
             <Profile token={token} userId={userId} role={role} onBack={handleBackToPrevious} onProfileUpdate={handleProfileUpdate} />
+          </main>
+        </div>
+      )}
+
+      {view === "orders" && token && userId && role && (
+        <div className="app-with-header">
+          {appHeader}
+          <main className="app-main">
+            <OrdersList token={token} userId={userId} role={role} onBack={handleBackToPrevious} />
           </main>
         </div>
       )}

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CategoryModel = exports.UserModel = exports.StallModel = exports.ReviewModel = exports.MenuItemModel = exports.FavoriteModel = exports.BudgetModel = void 0;
+exports.ReportModel = exports.OrderModel = exports.CategoryModel = exports.UserModel = exports.StallModel = exports.ReviewModel = exports.MenuItemModel = exports.FavoriteModel = exports.BudgetModel = void 0;
 var budget_model_1 = require("./budget.model");
 Object.defineProperty(exports, "BudgetModel", { enumerable: true, get: function () { return budget_model_1.BudgetModel; } });
 var favorite_model_1 = require("./favorite.model");
@@ -15,3 +15,7 @@ var user_model_1 = require("./user.model");
 Object.defineProperty(exports, "UserModel", { enumerable: true, get: function () { return user_model_1.UserModel; } });
 var category_model_1 = require("./category.model");
 Object.defineProperty(exports, "CategoryModel", { enumerable: true, get: function () { return category_model_1.CategoryModel; } });
+var order_model_1 = require("./order.model");
+Object.defineProperty(exports, "OrderModel", { enumerable: true, get: function () { return order_model_1.OrderModel; } });
+var report_model_1 = require("./report.model");
+Object.defineProperty(exports, "ReportModel", { enumerable: true, get: function () { return report_model_1.ReportModel; } });

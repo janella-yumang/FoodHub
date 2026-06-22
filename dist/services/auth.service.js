@@ -38,24 +38,30 @@ async function registerUser(input) {
 }
 async function loginUser(input) {
     const config = (0, env_1.getConfig)();
-    const user = await models_1.UserModel.findOne({ email: input.email.toLowerCase().trim(), isActive: true }).select("+passwordHash");
+    const user = await models_1.UserModel.findOne({ email: input.email.toLowerCase().trim() }).select("+passwordHash");
     if (!user) {
-        return null;
+        return { success: false, reason: "invalid_credentials" };
+    }
+    if (user.status === "Suspended" || !user.isActive) {
+        return { success: false, reason: "suspended" };
     }
     const passwordMatches = await bcryptjs_1.default.compare(input.password, user.passwordHash);
     if (!passwordMatches) {
-        return null;
+        return { success: false, reason: "invalid_credentials" };
     }
     return {
-        user: {
-            id: user._id.toString(),
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            profilePictureUrl: user.profilePictureUrl,
-            isActive: user.isActive
-        },
-        accessToken: (0, jwt_1.signAccessToken)({ userId: user._id.toString(), role: user.role }, config.jwtSecret)
+        success: true,
+        data: {
+            user: {
+                id: user._id.toString(),
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                profilePictureUrl: user.profilePictureUrl,
+                isActive: user.isActive
+            },
+            accessToken: (0, jwt_1.signAccessToken)({ userId: user._id.toString(), role: user.role }, config.jwtSecret)
+        }
     };
 }
 function isDuplicateEmailError(error) {

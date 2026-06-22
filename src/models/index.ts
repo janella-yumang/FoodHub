@@ -5,3 +5,5 @@ export { ReviewModel } from "./review.model";
 export { StallModel } from "./stall.model";
 export { UserModel } from "./user.model";
 export { CategoryModel } from "./category.model";
+export { OrderModel } from "./order.model";
+export { ReportModel } from "./report.model";

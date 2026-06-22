@@ -3200,6 +3200,8 @@ input {
   font-size: 15px;
   line-height: 1.5;
   color: #444;
+  overflow-y: auto;
+  max-height: 75vh;
 }
 
 .warning-text {
@@ -3931,6 +3933,101 @@ input {
     flex-direction: column;
     gap: 8px;
   }
+}
+
+/* pre-order system menu layout */
+.menu-content-layout {
+  display: flex;
+  gap: 30px;
+  align-items: flex-start;
+  margin-top: 24px;
+}
+
+.menu-items-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.menu-cart-sidebar {
+  width: 340px;
+  position: -webkit-sticky;
+  position: sticky;
+  top: 24px;
+  background: #ffffff;
+  border: 1px solid #e8e2d9;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+  flex-shrink: 0;
+}
+
+.menu-cart-sidebar h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 1.2rem;
+  color: #8B0000;
+  font-weight: 700;
+  border-bottom: 2px solid #f0f0f0;
+  padding-bottom: 12px;
+}
+
+@media (max-width: 850px) {
+  .menu-content-layout {
+    flex-direction: column;
+  }
+  .menu-cart-sidebar {
+    width: 100%;
+    position: static;
+  }
+}
+
+/* Order/Payment status badges styling */
+.badge-status-preparing {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.badge-status-ready {
+  background: #e0f2f1;
+  color: #008080;
+}
+
+.badge-status-completed {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.badge-status-cancelled {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.badge-pm-gcash {
+  background: #e3f2fd;
+  color: #1e88e5;
+}
+
+.badge-pm-cash {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.badge-ps-unpaid {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.badge-ps-paid {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+/* For student profile order history page */
+.student-orders-section h2 {
+  color: #8B0000;
+  font-weight: 700;
+  margin-bottom: 16px;
+  font-size: 1.4rem;
 }
 
 

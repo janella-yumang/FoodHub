@@ -14,6 +14,7 @@ import {
   deleteAdminMenuItem,
   generateNutritionInfo
 } from "../lib/adminApi";
+import { fetchVendorOrders, updateOrderStatusAPI, type OrderSummary, submitReport } from "../lib/api";
 
 interface VendorDashboardProps {
   token: string;
@@ -50,12 +51,17 @@ const emptyMenuItem = {
 };
 
 export function VendorDashboard({ token }: VendorDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"stalls" | "products">("stalls");
+  const [activeTab, setActiveTab] = useState<"stalls" | "products" | "orders">("stalls");
   
   // Data States
   const [stalls, setStalls] = useState<AdminStallItem[]>([]);
   const [products, setProducts] = useState<AdminMenuItem[]>([]);
   const [categories, setCategories] = useState<AdminCategoryItem[]>([]);
+  const [orders, setOrders] = useState<OrderSummary[]>([]);
+
+  // Order filters
+  const [orderStatusFilter, setOrderStatusFilter] = useState("all");
+  const [orderPaymentFilter, setOrderPaymentFilter] = useState("all");
 
   // Search/Filter/Pagination States
   const [searchTerm, setSearchTerm] = useState("");
@@ -68,9 +74,16 @@ export function VendorDashboard({ token }: VendorDashboardProps) {
   const itemsPerPage = 8;
 
   // Modal States
-  const [activeModal, setActiveModal] = useState<"none" | "stall_create" | "stall_edit" | "product_create" | "product_edit">("none");
+  const [activeModal, setActiveModal] = useState<"none" | "stall_create" | "stall_edit" | "product_create" | "product_edit" | "student_report">("none");
   const [selectedStallId, setSelectedStallId] = useState<string | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+
+  // Student Report States
+  const [reportStudentId, setReportStudentId] = useState("");
+  const [reportStudentName, setReportStudentName] = useState("");
+  const [reportOrderId, setReportOrderId] = useState<string | null>(null);
+  const [reportReason, setReportReason] = useState("");
+  const [reportDescription, setReportDescription] = useState("");
 
   // Form States
   const [stallForm, setStallForm] = useState(() => ({ ...emptyStall }));
@@ -156,14 +169,16 @@ export function VendorDashboard({ token }: VendorDashboardProps) {
 
   async function loadData() {
     try {
-      const [stallData, productData, categoryData] = await Promise.all([
+      const [stallData, productData, categoryData, orderData] = await Promise.all([
         fetchVendorStalls(token),
         fetchAdminMenuItemsAll(token), // Fetches all, backend will filter vendor's items automatically
-        fetchAdminCategories(token)
+        fetchAdminCategories(token),
+        fetchVendorOrders(token)
       ]);
       setStalls(stallData);
       setProducts(productData);
       setCategories(categoryData);
+      setOrders(orderData);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load vendor dashboard data.");
@@ -293,6 +308,62 @@ export function VendorDashboard({ token }: VendorDashboardProps) {
     }
   };
 
+  const handleUpdateOrderStatus = async (orderId: string, status: "Pending" | "Preparing" | "Ready" | "Completed" | "Cancelled") => {
+    try {
+      setError(null);
+      const res = await updateOrderStatusAPI(token, orderId, { status });
+      setOrders(prev => prev.map(o => o._id === orderId ? res.order : o));
+      showSuccess("Order status updated successfully!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update order status.");
+    }
+  };
+
+  const handleUpdatePaymentStatus = async (orderId: string, paymentStatus: "Unpaid" | "Paid") => {
+    try {
+      setError(null);
+      const res = await updateOrderStatusAPI(token, orderId, { paymentStatus });
+      setOrders(prev => prev.map(o => o._id === orderId ? res.order : o));
+      showSuccess("Payment status updated successfully!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update payment status.");
+    }
+  };
+
+  const handleOpenReportModal = (studentId: string, studentName: string, orderId: string) => {
+    setReportStudentId(studentId);
+    setReportStudentName(studentName);
+    setReportOrderId(orderId);
+    setReportReason("");
+    setReportDescription("");
+    setError(null);
+    setSuccessMsg(null);
+    setActiveModal("student_report");
+  };
+
+  const handleCreateReport = async () => {
+    if (!reportReason || !reportDescription) {
+      setError("Please select a reason and fill out the details.");
+      return;
+    }
+    setIsSaving(true);
+    setError(null);
+    try {
+      await submitReport(token, {
+        reportedUserId: reportStudentId,
+        orderId: reportOrderId,
+        reason: reportReason,
+        description: reportDescription
+      });
+      showSuccess(`Report against ${reportStudentName} has been submitted successfully.`);
+      setActiveModal("none");
+    } catch (err: any) {
+      setError(err.message || "Failed to submit report");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // --- Delete Actions ---
   const triggerDeleteConfirm = (type: "stall" | "product", id: string, name: string) => {
     setConfirmDelete({ isOpen: true, type, id, name });
@@ -348,6 +419,18 @@ export function VendorDashboard({ token }: VendorDashboardProps) {
     });
   }, [products, searchTerm, productCategoryFilter, productStallFilter]);
 
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => {
+      const studentName = typeof o.userId === "object" && o.userId ? o.userId.name : "";
+      const studentId = typeof o.userId === "object" && o.userId ? (o.userId.studentId || "") : "";
+      const matchesSearch = studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        studentId.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = orderStatusFilter === "all" || o.status === orderStatusFilter;
+      const matchesPayment = orderPaymentFilter === "all" || o.paymentStatus === orderPaymentFilter;
+      return matchesSearch && matchesStatus && matchesPayment;
+    });
+  }, [orders, searchTerm, orderStatusFilter, orderPaymentFilter]);
+
   // --- Pagination Slice ---
   const currentStalls = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -359,12 +442,18 @@ export function VendorDashboard({ token }: VendorDashboardProps) {
     return filteredProducts.slice(start, start + itemsPerPage);
   }, [filteredProducts, currentPage]);
 
+  const currentOrders = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredOrders.slice(start, start + itemsPerPage);
+  }, [filteredOrders, currentPage]);
+
   const totalPages = useMemo(() => {
     let count = 0;
     if (activeTab === "stalls") count = filteredStalls.length;
     else if (activeTab === "products") count = filteredProducts.length;
+    else if (activeTab === "orders") count = filteredOrders.length;
     return Math.ceil(count / itemsPerPage);
-  }, [activeTab, filteredStalls, filteredProducts]);
+  }, [activeTab, filteredStalls, filteredProducts, filteredOrders]);
 
   // Get stall name helper
   const getStallName = (menuItem: AdminMenuItem) => {
@@ -405,6 +494,9 @@ export function VendorDashboard({ token }: VendorDashboardProps) {
         </button>
         <button className={`tab-btn ${activeTab === "products" ? "active" : ""}`} onClick={() => setActiveTab("products")}>
           <span>🍜</span> Menu Products
+        </button>
+        <button className={`tab-btn ${activeTab === "orders" ? "active" : ""}`} onClick={() => setActiveTab("orders")}>
+          <span>📋</span> Pre-Orders
         </button>
       </div>
 
@@ -472,6 +564,24 @@ export function VendorDashboard({ token }: VendorDashboardProps) {
                   {stalls.map((s) => (
                     <option key={s._id} value={s._id}>{s.name}</option>
                   ))}
+                </select>
+              </>
+            )}
+
+            {activeTab === "orders" && (
+              <>
+                <select value={orderStatusFilter} onChange={(e) => { setOrderStatusFilter(e.target.value); setCurrentPage(1); }}>
+                  <option value="all">All Order Statuses</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Preparing">Preparing</option>
+                  <option value="Ready">Ready</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Cancelled">Cancelled</option>
+                </select>
+                <select value={orderPaymentFilter} onChange={(e) => { setOrderPaymentFilter(e.target.value); setCurrentPage(1); }}>
+                  <option value="all">All Payment Statuses</option>
+                  <option value="Unpaid">Unpaid</option>
+                  <option value="Paid">Paid</option>
                 </select>
               </>
             )}
@@ -634,6 +744,155 @@ export function VendorDashboard({ token }: VendorDashboardProps) {
                             >
                               Delete
                             </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {activeTab === "orders" && (
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Order Info</th>
+                  <th>Student Info</th>
+                  <th>Stall</th>
+                  <th>Items & Total</th>
+                  <th>Pickup & Payment</th>
+                  <th>Status Controls</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentOrders.length === 0 ? (
+                  <tr><td colSpan={6} className="empty-row">No pre-orders found.</td></tr>
+                ) : (
+                  currentOrders.map((o) => {
+                    const student = typeof o.userId === "object" ? o.userId : null;
+                    const stallName = typeof o.stallId === "object" && o.stallId ? o.stallId.name : "Unknown Stall";
+                    return (
+                      <tr key={o._id}>
+                        <td>
+                          <div style={{ fontSize: "12px", color: "#666" }}>
+                            <strong>ID:</strong> <span style={{ fontFamily: "monospace" }}>{o._id.substring(o._id.length - 6)}</span>
+                          </div>
+                          <div style={{ fontSize: "11px", color: "#888", marginTop: "4px" }}>
+                            {new Date(o.createdAt).toLocaleString()}
+                          </div>
+                        </td>
+                        <td>
+                          {student ? (
+                            <div style={{ fontSize: "13px", lineHeight: "1.4" }}>
+                              <strong>{student.name}</strong>
+                              <div style={{ fontSize: "12px", color: "#555" }}>
+                                🆔 {student.studentId || "No Student ID"} | 📚 {student.courseSection || "No Section"}
+                              </div>
+                              <div style={{ fontSize: "12.5px", color: "#008080", fontWeight: 600 }}>
+                                📞 {student.contactNumber || "No Contact"}
+                              </div>
+                              <div style={{ fontSize: "11px", color: "#888" }}>
+                                ✉️ {student.schoolEmail || student.email}
+                              </div>
+                            </div>
+                          ) : (
+                            <span style={{ color: "#999" }}>Unknown Student ({typeof o.userId === "string" ? o.userId : "N/A"})</span>
+                          )}
+                        </td>
+                        <td>
+                          <strong>{stallName}</strong>
+                        </td>
+                        <td>
+                          <div style={{ fontSize: "13px", maxHeight: "100px", overflowY: "auto", marginBottom: "6px" }}>
+                            {o.items.map((item, idx) => (
+                              <div key={idx} style={{ padding: "2px 0", borderBottom: "1px dashed #f0f0f0" }}>
+                                • {item.name} x{item.quantity} <span style={{ color: "#666" }}>({item.price * item.quantity})</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{ fontWeight: "bold", fontSize: "14px", color: "#8B0000" }}>
+                            Total: Rs. {o.totalAmount}
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ fontSize: "13px" }}>
+                            ⏰ Pickup: <strong>{o.pickupTime}</strong>
+                          </div>
+                          <div style={{ marginTop: "4px", display: "flex", gap: "6px", alignItems: "center" }}>
+                            <span className={`badge badge-pm-${o.paymentMethod.toLowerCase()}`}>
+                              {o.paymentMethod === "GCash" ? "📱 GCash" : "💵 Cash"}
+                            </span>
+                            <span className={`badge badge-ps-${o.paymentStatus.toLowerCase()}`}>
+                              {o.paymentStatus}
+                            </span>
+                          </div>
+                          {o.paymentMethod === "GCash" && o.gcashNumber && (
+                            <div style={{ fontSize: "11.5px", color: "#333", marginTop: "6px", borderTop: "1px dashed #ddd", paddingTop: "4px" }}>
+                              📱 Ref: <strong>{o.gcashNumber}</strong>
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxWidth: "160px" }}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                              <label style={{ fontSize: "11px", fontWeight: "bold", color: "#666" }}>Order Status</label>
+                              <select
+                                value={o.status}
+                                onChange={(e) => handleUpdateOrderStatus(o._id, e.target.value as any)}
+                                style={{ padding: "4px 8px", borderRadius: "4px", fontSize: "12px", border: "1px solid #ccc", background: "#fff" }}
+                              >
+                                <option value="Pending">Pending</option>
+                                <option value="Preparing">Preparing</option>
+                                <option value="Ready">Ready</option>
+                                <option value="Completed">Completed</option>
+                                <option value="Cancelled">Cancelled</option>
+                              </select>
+                            </div>
+                            
+                            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                              <label style={{ fontSize: "11px", fontWeight: "bold", color: "#666" }}>Payment Status</label>
+                              <select
+                                value={o.paymentStatus}
+                                onChange={(e) => handleUpdatePaymentStatus(o._id, e.target.value as any)}
+                                style={{ padding: "4px 8px", borderRadius: "4px", fontSize: "12px", border: "1px solid #ccc", background: "#fff" }}
+                              >
+                                <option value="Unpaid">Unpaid</option>
+                                <option value="Paid">Paid</option>
+                              </select>
+                            </div>
+
+                            {student && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenReportModal(student._id, student.name, o._id)}
+                                style={{
+                                  marginTop: "6px",
+                                  padding: "4px 8px",
+                                  fontSize: "11px",
+                                  fontWeight: "600",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  gap: "4px",
+                                  background: "#ffeef0",
+                                  color: "#d9363e",
+                                  border: "1px solid #ffccc7",
+                                  borderRadius: "4px",
+                                  cursor: "pointer",
+                                  transition: "all 0.2s"
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = "#ffccc7";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = "#ffeef0";
+                                }}
+                              >
+                                ⚠️ Report Student
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1334,6 +1593,53 @@ export function VendorDashboard({ token }: VendorDashboardProps) {
                 {isSaving ? "Deleting..." : "Confirm Delete"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. REPORT STUDENT MODAL */}
+      {activeModal === "student_report" && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: "500px", width: "100%" }}>
+            <div className="modal-header">
+              <h3>⚠️ Report Student: {reportStudentName}</h3>
+              <button className="close-btn" onClick={() => setActiveModal("none")}>&times;</button>
+            </div>
+            <form onSubmit={(e) => { e.preventDefault(); void handleCreateReport(); }}>
+              <div className="modal-body" style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div className="form-group" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <label style={{ fontSize: "13px", fontWeight: "600", color: "#333" }}>Reason for Report *</label>
+                  <select
+                    required
+                    value={reportReason}
+                    onChange={(e) => setReportReason(e.target.value)}
+                    style={{ padding: "10px", borderRadius: "6px", border: "1px solid #ccc", fontSize: "14px", width: "100%" }}
+                  >
+                    <option value="">-- Select a reason --</option>
+                    <option value="No-show / Unclaimed order">No-show / Unclaimed order</option>
+                    <option value="Fake / Duplicate GCash payment">Fake / Duplicate GCash payment</option>
+                    <option value="Abusive behavior / Language">Abusive behavior / Language</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div className="form-group" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <label style={{ fontSize: "13px", fontWeight: "600", color: "#333" }}>Description / Additional Details *</label>
+                  <textarea
+                    required
+                    value={reportDescription}
+                    onChange={(e) => setReportDescription(e.target.value)}
+                    placeholder="Provide details about the incident, e.g. amount, times attempted to contact..."
+                    style={{ padding: "10px", borderRadius: "6px", border: "1px solid #ccc", minHeight: "100px", resize: "vertical", fontSize: "14px", width: "100%" }}
+                  />
+                </div>
+              </div>
+              <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", gap: "10px", padding: "16px 20px", borderTop: "1px solid #eee" }}>
+                <button type="button" className="btn-secondary" onClick={() => setActiveModal("none")}>Cancel</button>
+                <button type="submit" className="btn-danger" disabled={isSaving}>
+                  {isSaving ? "Submitting..." : "Submit Report"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

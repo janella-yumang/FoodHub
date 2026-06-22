@@ -7,6 +7,8 @@ import { stallsRouter } from "./routes/stalls.routes";
 import { usersRouter } from "./routes/users.routes";
 import { analyticsRouter } from "./routes/analytics.routes";
 import { aiRouter } from "./routes/ai.routes";
+import { ordersRouter } from "./routes/order.routes";
+import { reportRouter } from "./routes/report.routes";
 
 export function createApp() {
   const app = express();
@@ -20,6 +22,8 @@ export function createApp() {
   app.use("/users", usersRouter);
   app.use("/analytics", analyticsRouter);
   app.use("/ai", aiRouter);
+  app.use("/orders", ordersRouter);
+  app.use("/reports", reportRouter);
 
   app.get("/health", (_request: Request, response: Response) => {
     response.json({ status: "ok", service: "FoodHub API" });

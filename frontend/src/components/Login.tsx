@@ -2,13 +2,15 @@ import { useState } from "react";
 
 interface LoginProps {
   onLogin: (token: string, userId: string, role: string, name?: string, profilePictureUrl?: string | null) => void;
+  onBackToHome?: () => void;
 }
 
-export function Login({ onLogin }: LoginProps) {
+export function Login({ onLogin, onBackToHome }: LoginProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [showRegister, setShowRegister] = useState(false);
   const [name, setName] = useState("");
   const [userType, setUserType] = useState<"user" | "vendor">("user");
@@ -72,6 +74,7 @@ export function Login({ onLogin }: LoginProps) {
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setSuccessMsg(null);
     setIsLoading(true);
 
     try {
@@ -90,8 +93,19 @@ export function Login({ onLogin }: LoginProps) {
         }),
       });
 
-      const { token, userId, role, name: userName, profilePictureUrl } = await parseAuthResponse(response);
-      onLogin(token, userId, role, userName, profilePictureUrl);
+      if (!response.ok) {
+        const data = await response.json() as { message?: string };
+        throw new Error(data.message ?? "Registration failed");
+      }
+
+      setSuccessMsg("Registration successful! Please log in below.");
+      setShowRegister(false);
+      setPassword("");
+      setName("");
+      setStudentId("");
+      setCourseSection("");
+      setSchoolEmail("");
+      setContactNumber("");
     } catch (err) {
       if (err instanceof TypeError) {
         setError(getNetworkErrorMessage());
@@ -236,6 +250,11 @@ export function Login({ onLogin }: LoginProps) {
             </div>
           )}
 
+          {successMsg && (
+            <div className="alert alert-success" style={{ margin: "0 0 16px 0", width: "100%", boxSizing: "border-box" }}>
+              {successMsg}
+            </div>
+          )}
           {error && <div className="login-error">{error}</div>}
 
           <button type="submit" className="login-button" disabled={isLoading}>
@@ -243,17 +262,29 @@ export function Login({ onLogin }: LoginProps) {
           </button>
         </form>
 
-        <div className="login-footer">
+        <div className="login-footer" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           <button
             type="button"
             className="link-button"
             onClick={() => {
               setShowRegister(!showRegister);
               setError(null);
+              setSuccessMsg(null);
             }}
           >
             {showRegister ? "Already have an account? Login" : "Need an account? Register"}
           </button>
+          
+          {onBackToHome && (
+            <button
+              type="button"
+              className="link-button"
+              onClick={onBackToHome}
+              style={{ color: "#008080", fontWeight: "bold", marginTop: "4px" }}
+            >
+              ← Browse as Guest
+            </button>
+          )}
         </div>
 
         <p className="support-text">For support email to admin@tup.edu.np</p>
